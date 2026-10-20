@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { db } from '../db/index.ts';
 import { sseManager } from '../scheduler/sse.ts';
+import { testAiConnection } from '../ai/gemini.ts';
 
 export const settingsRouter = Router();
 
@@ -49,6 +50,16 @@ settingsRouter.post('/toggle-global-pause', (req, res) => {
 
   sseManager.broadcast('polling_status', { paused: newVal === '1' });
   res.json({ ok: true, paused: newVal === '1' });
+});
+
+// Test AI Connection
+settingsRouter.post('/test-ai', async (req, res) => {
+  try {
+    const result = await testAiConnection(req.body);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ ok: false, message: err.message || 'خطا در آزمون اتصال هوش مصنوعی' });
+  }
 });
 
 // Clean up old unbookmarked posts (retention)

@@ -292,8 +292,14 @@ function initDefaultSettings() {
 
     // AI Settings
     ai_enrichment_enabled: '1',
-    ai_model: 'gemini-2.5-flash',
+    ai_provider: 'gemini', // 'gemini' | 'openai' | 'openrouter'
+    ai_model: 'gemini-3.8-flash',
     ai_batch_size: '5',
+    ai_openai_base_url: 'https://api.openai.com/v1',
+    ai_openai_api_key: '',
+    ai_openai_model: 'gpt-4o-mini',
+    ai_openrouter_api_key: '',
+    ai_openrouter_model: 'openai/gpt-4o-mini',
 
     // Nitter instances (one URL per line)
     nitter_instances: [
