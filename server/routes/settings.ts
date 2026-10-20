@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { db } from '../db/index.ts';
 import { sseManager } from '../scheduler/sse.ts';
 import { testAiConnection } from '../ai/gemini.ts';
+import { sendTelegram, parseChatIds, escapeHtml } from '../notify/telegram.ts';
 
 export const settingsRouter = Router();
 
@@ -60,6 +61,23 @@ settingsRouter.post('/test-ai', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ ok: false, message: err.message || 'خطا در آزمون اتصال هوش مصنوعی' });
   }
+});
+
+// Send a test message to every configured Telegram chat
+settingsRouter.post('/test-telegram', async (req, res) => {
+  const body = req.body || {};
+  const override: { token?: string; chatIds?: string[] } = {};
+  if (typeof body.token === 'string' && body.token.trim()) override.token = body.token.trim();
+  if (typeof body.chatIds === 'string' && body.chatIds.trim()) override.chatIds = parseChatIds(body.chatIds);
+
+  const result = await sendTelegram(`✅ <b>X Monitor</b>\nاتصال تلگرام با موفقیت برقرار شد.\n<i>${escapeHtml(new Date().toLocaleString('fa-IR'))}</i>`, override);
+  const detail = result.failed.map((f) => `${f.chatId}: ${f.error}`).join('\n');
+  res.json({
+    ok: result.ok,
+    message: result.ok
+      ? `پیام آزمایشی به ${result.sent} مقصد ارسال شد.`
+      : `${result.sent} ارسال موفق، ${result.failed.length} ناموفق.\n${detail}`,
+  });
 });
 
 // Clean up old unbookmarked posts (retention)

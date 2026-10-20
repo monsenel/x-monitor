@@ -327,6 +327,12 @@ function initDefaultSettings() {
       'https://nitter.space'
     ].join('\n'),
 
+    // Telegram
+    telegram_enabled: '1',
+    telegram_bot_token: '',
+    telegram_chat_ids: '', // comma / newline separated: user ids, group ids (negative), @channel
+    telegram_send_digests: '1',
+
     // Digest Schedule
     digest_schedule_type: 'daily', // 'off' | 'hourly' | 'daily'
     digest_daily_time: '20:00',

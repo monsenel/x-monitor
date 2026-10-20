@@ -22,6 +22,7 @@ import {
   Sun,
   Moon,
   Languages,
+  Send,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -34,6 +35,9 @@ export const SettingsView: React.FC = () => {
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showTgToken, setShowTgToken] = useState(false);
+  const [tgTesting, setTgTesting] = useState(false);
+  const [tgTestResult, setTgTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [statusBanner, setStatusBanner] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadData = async () => {
@@ -132,6 +136,25 @@ export const SettingsView: React.FC = () => {
       });
     } finally {
       setAiTesting(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setTgTesting(true);
+    setTgTestResult(null);
+    try {
+      const res = await apiRequest<{ ok: boolean; message: string }>('/api/settings/test-telegram', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: settings['telegram_bot_token'] || '',
+          chatIds: settings['telegram_chat_ids'] || '',
+        }),
+      });
+      setTgTestResult(res);
+    } catch (err: any) {
+      setTgTestResult({ ok: false, message: err.message });
+    } finally {
+      setTgTesting(false);
     }
   };
 
@@ -925,6 +948,104 @@ export const SettingsView: React.FC = () => {
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Telegram Notifications */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
+          <Send className="w-4 h-4 text-cyan-400" />
+          <span>{t('Telegram Notifications', 'اعلان‌های تلگرام')}</span>
+        </h3>
+
+        <div className="space-y-4 text-xs">
+          <div className="flex flex-wrap gap-6">
+            <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings['telegram_enabled'] !== '0'}
+                onChange={(e) => handleChange('telegram_enabled', e.target.checked ? '1' : '0')}
+              />
+              <span>{t('Enable Telegram sending', 'فعال بودن ارسال به تلگرام')}</span>
+            </label>
+            <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings['telegram_send_digests'] !== '0'}
+                onChange={(e) => handleChange('telegram_send_digests', e.target.checked ? '1' : '0')}
+              />
+              <span>{t('Send digests automatically', 'ارسال خودکار خلاصه‌ها (Digest)')}</span>
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-slate-400 mb-1">
+              {t('Bot token (from @BotFather):', 'توکن ربات (از @BotFather):')}
+            </label>
+            <div className="relative">
+              <input
+                type={showTgToken ? 'text' : 'password'}
+                dir="ltr"
+                value={settings['telegram_bot_token'] || ''}
+                onChange={(e) => handleChange('telegram_bot_token', e.target.value)}
+                placeholder="123456789:AAH..."
+                className={`w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] ${
+                  isRtl ? 'pl-9' : 'pr-9'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowTgToken(!showTgToken)}
+                className={`absolute ${isRtl ? 'left-2.5' : 'right-2.5'} top-2.5 text-slate-500 hover:text-slate-300 cursor-pointer`}
+              >
+                {showTgToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-400 mb-1">
+              {t('Recipient chat IDs (one per line or comma-separated):', 'شناسه گیرنده‌ها (هر خط یکی، یا با کاما جدا کنید):')}
+            </label>
+            <textarea
+              dir="ltr"
+              rows={3}
+              value={settings['telegram_chat_ids'] || ''}
+              onChange={(e) => handleChange('telegram_chat_ids', e.target.value)}
+              placeholder={'123456789\n-1001234567890\n@my_channel'}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px]"
+            />
+            <p className="text-slate-500 mt-1 leading-relaxed">
+              {t(
+                'Personal user ID, group ID (negative number, bot must be a member) or @channel (bot must be admin). Each person must press /start on the bot first.',
+                'شناسه عددی شخص، شناسه گروه (عدد منفی؛ ربات باید عضو گروه باشد) یا @کانال (ربات باید ادمین باشد). هر شخص باید قبلاً در ربات /start را بزند.'
+              )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleTestTelegram}
+              disabled={tgTesting}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{tgTesting ? t('Sending...', 'در حال ارسال...') : t('Send test message', 'ارسال پیام آزمایشی')}</span>
+            </button>
+            <span className="text-slate-500">{t('Uses the values above, even before saving.', 'با مقادیر بالا، حتی قبل از ذخیره، آزمایش می‌شود.')}</span>
+          </div>
+
+          {tgTestResult && (
+            <div
+              className={`p-3 rounded-xl border whitespace-pre-line ${
+                tgTestResult.ok
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              }`}
+            >
+              {tgTestResult.message}
+            </div>
+          )}
         </div>
       </div>
 

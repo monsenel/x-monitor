@@ -1,5 +1,6 @@
 import { db } from '../db/index.ts';
 import { sseManager } from '../scheduler/sse.ts';
+import { getTelegramConfig, sendTelegram, escapeHtml } from '../notify/telegram.ts';
 import type { NormalizedPost } from '../providers/types.ts';
 
 export interface AlertRule {
@@ -85,48 +86,17 @@ export class AlertEngine {
   }
 
   private async sendTelegramAlert(ruleId: string, post: NormalizedPost, title: string, message: string) {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID;
+    const cfg = getTelegramConfig();
+    if (!cfg.enabled) return;
 
-    if (!token || !chatId) {
-      db.prepare(`
-        INSERT INTO alert_log (rule_id, post_id, channel, title, message, status, error, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(ruleId, post.id, 'telegram', title, message, 'failed', 'توکن یا شناسه چت تلگرام در env تنظیم نشده است.', new Date().toISOString());
-      return;
-    }
+    const html = `🔔 <b>${escapeHtml(title)}</b>\n\n👤 <b>نویسنده:</b> @${escapeHtml(post.authorUsername)}\n📝 <b>متن:</b> ${escapeHtml(post.text)}\n🔗 <a href="${escapeHtml(post.url)}">مشاهده در توییتر</a>`;
+    const result = await sendTelegram(html);
 
-    try {
-      const tgText = `🔔 *${title}*\n\n👤 *نویسنده:* @${post.authorUsername}\n📝 *متن:* ${post.text}\n🔗 [مشاهده در توییتر](${post.url})`;
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: tgText,
-          parse_mode: 'Markdown',
-          disable_web_page_preview: false,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.text();
-        db.prepare(`
-          INSERT INTO alert_log (rule_id, post_id, channel, title, message, status, error, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(ruleId, post.id, 'telegram', title, message, 'failed', err, new Date().toISOString());
-      } else {
-        db.prepare(`
-          INSERT INTO alert_log (rule_id, post_id, channel, title, message, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(ruleId, post.id, 'telegram', title, message, 'sent', new Date().toISOString());
-      }
-    } catch (err: any) {
-      db.prepare(`
-        INSERT INTO alert_log (rule_id, post_id, channel, title, message, status, error, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(ruleId, post.id, 'telegram', title, message, 'failed', err.message, new Date().toISOString());
-    }
+    const error = result.failed.map((f) => `${f.chatId}: ${f.error}`).join(' | ');
+    db.prepare(`
+      INSERT INTO alert_log (rule_id, post_id, channel, title, message, status, error, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(ruleId, post.id, 'telegram', title, message, result.sent > 0 ? 'sent' : 'failed', error || null, new Date().toISOString());
   }
 }
 

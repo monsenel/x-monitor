@@ -3,6 +3,7 @@ import { providerRegistry } from '../providers/index.ts';
 import type { NormalizedPost, SourceEntity } from '../providers/types.ts';
 import { sseManager } from './sse.ts';
 import { alertEngine } from '../alerts/engine.ts';
+import { sendDigestToTelegram } from '../notify/telegram.ts';
 import { enrichPostsBatch, clusterRecentPosts, generateDigest } from '../ai/gemini.ts';
 
 export class SchedulerPoller {
@@ -512,7 +513,16 @@ export class SchedulerPoller {
     );
 
     sseManager.broadcast('digest_ready', { id, title: digest.title });
-    return { id, ...digest };
+
+    // Telegram delivery must never fail the digest itself
+    let telegram: { sent: number; failed: { chatId: string; error: string }[] } | null = null;
+    try {
+      telegram = await sendDigestToTelegram(digest);
+      if (telegram?.failed.length) console.error('Telegram digest delivery failed:', telegram.failed);
+    } catch (err) {
+      console.error('Telegram digest delivery error:', err);
+    }
+    return { id, ...digest, telegram };
   }
 }
 
