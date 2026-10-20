@@ -18,7 +18,13 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH:-admin123456}
       - SESSION_SECRET=${SESSION_SECRET:-change-this-to-a-very-secret-random-32char-key}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # AI is configured from the admin panel; these are optional fallbacks
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
       - X_BEARER_TOKEN=${X_BEARER_TOKEN:-}
       - TWITTERAPI_IO_KEY=${TWITTERAPI_IO_KEY:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
