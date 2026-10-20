@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xmonitor-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_PATH=/data/xmonitor.db
+      - SIDECAR_URL=http://scraper:8000
+      - SIDECAR_SHARED_SECRET=${SIDECAR_SHARED_SECRET:-xmonitor-internal-secret-change-me}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH:-admin123456}
+      - SESSION_SECRET=${SESSION_SECRET:-change-this-to-a-very-secret-random-32char-key}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - X_BEARER_TOKEN=${X_BEARER_TOKEN:-}
+      - TWITTERAPI_IO_KEY=${TWITTERAPI_IO_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - TZ=${TZ:-Asia/Tehran}
+    volumes:
+      - xmonitor-data:/data
+    networks:
+      - xmonitor-net
+    depends_on:
+      - scraper
+
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
+    container_name: xmonitor-scraper
+    restart: unless-stopped
+    # Port is NOT exposed to the host for security - reachable ONLY internally from Node app
+    expose:
+      - "8000"
+    environment:
+      - SIDECAR_SHARED_SECRET=${SIDECAR_SHARED_SECRET:-xmonitor-internal-secret-change-me}
+      - TWSCRAPE_DB_PATH=/data/twscrape_accounts.db
+    volumes:
+      - twscrape-data:/data
+    networks:
+      - xmonitor-net
+
+volumes:
+  xmonitor-data:
+  twscrape-data:
+
+networks:
+  xmonitor-net:
+    driver: bridge

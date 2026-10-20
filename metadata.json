@@ -1,0 +1,6 @@
+{
+  "name": "X Monitor",
+  "description": "پنل پایش هوشمند حساب‌ها و هشتگ‌های توییتر (X) با خلاصه و تحلیل هوش مصنوعی Gemini و مدیریت هزینه",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
