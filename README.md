@@ -20,7 +20,7 @@ A dedicated, single-user dashboard for continuously monitoring X (Twitter) accou
   - Clustering of posts from the last 24 hours into shared events
   - Periodic and on-demand analytical digests
   - Prompt-injection defenses
-  - The AI provider, model, and API keys can be changed from the Settings page; environment variables act as defaults
+  - **Configured entirely from the admin panel** (Settings → AI Configuration): choose the provider (Gemini / OpenAI-compatible / OpenRouter), model, base URL, and API key, with presets for OpenAI, Groq, DeepSeek, and Ollama and a built-in "Test AI Connection" button. Environment variables are optional fallbacks only
 - **Built-in scheduler:**
   - Configurable polling intervals in minutes and hours (15m, 30m, 1h, ...)
   - Schedule inheritance: global settings → topic group → individual source
@@ -109,11 +109,11 @@ The system automatically health-checks the instances and removes a failing insta
 | `ADMIN_USERNAME` | Yes | Admin username (default: `admin`) |
 | `ADMIN_PASSWORD_HASH` | Yes | scrypt hash of the admin password, generated with `npm run hash-password` |
 | `SESSION_SECRET` | Yes | Session encryption key (at least 32 characters) |
-| `GEMINI_API_KEY` | Yes* | Google Gemini API key (default AI provider) |
-| `OPENAI_API_KEY` | No | API key for OpenAI or any OpenAI-compatible endpoint |
+| `GEMINI_API_KEY` | No* | Fallback Google Gemini API key (default AI provider) |
+| `OPENAI_API_KEY` | No* | API key for OpenAI or any OpenAI-compatible endpoint |
 | `OPENAI_BASE_URL` | No | Base URL for the OpenAI-compatible API (default: `https://api.openai.com/v1`) |
 | `OPENAI_MODEL` | No | OpenAI model name (default: `gpt-4o-mini`) |
-| `OPENROUTER_API_KEY` | No | OpenRouter API key |
+| `OPENROUTER_API_KEY` | No* | OpenRouter API key |
 | `OPENROUTER_MODEL` | No | OpenRouter model name (default: `openai/gpt-4o-mini`) |
 | `SIDECAR_URL` | Yes | Sidecar URL (in Docker: `http://scraper:8000`) |
 | `SIDECAR_SHARED_SECRET` | Yes | Shared authentication secret between Node and the Python sidecar |
@@ -123,9 +123,7 @@ The system automatically health-checks the instances and removes a failing insta
 | `TELEGRAM_CHAT_ID` | No | Telegram chat or channel ID for notifications |
 | `TZ` | No | Default timezone (default: `Asia/Tehran`) |
 
-\* Required only when Gemini is the selected AI provider. If you use OpenAI or OpenRouter, set the matching key instead (or enter it in Settings).
-
-> **Docker note:** `docker-compose.yml` only forwards the variables listed in its `environment` section to the `app` container. To use the OpenAI/OpenRouter variables via `.env`, add them there, or configure the AI provider from the Settings page instead.
+\* AI settings are configured from the admin panel (Settings → AI Configuration), and values saved there take priority. The AI-related environment variables are only used as fallbacks when nothing is set in the panel.
 
 ---
 
