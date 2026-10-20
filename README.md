@@ -1,91 +1,94 @@
-# X Monitor — پنل پایش هوشمند حساب‌ها و هشتگ‌های شبکه توییتر (X)
+# X Monitor — Smart Monitoring Dashboard for X (Twitter) Accounts and Hashtags
 
-یک پنل اختصاصی، تک‌کاربره و پیشرفته برای پایش مداوم حساب‌ها، هشتگ‌ها، کلیدواژه‌ها و کوئری‌های پیچیده شبکه توییتر (X). دارای سیستم زمان‌بندی مستقل، خلاصه‌سازی و ارزیابی اهمیت پست‌ها با هوش مصنوعی Gemini، کنترل هزینه‌ها با قابلیت Kill-Switch، و پشتیبانی از چهار ارائه‌دهنده داده (رایگان و پرداختی).
+A dedicated, single-user dashboard for continuously monitoring X (Twitter) accounts, hashtags, keywords, and advanced search queries. It features an independent scheduler, AI-powered summarization and importance scoring (Gemini, OpenAI-compatible APIs, or OpenRouter), cost control with a Kill-Switch, and support for four data providers (free and paid).
 
----
-
-## ۱. ویژگی‌های کلیدی
-
-- **چهار ارائه‌دهنده داده قابل تعویض (Pluggable Adapters):**
-  1. `twscrape` (سایدکار محلی با حساب اختصاصی — **رایگان و پیش‌فرض**)
-  2. `nitter-rss` (فیدهای عمومی Nitter با چرخش سرورها — **رایگان و پشتیبان خودکار**)
-  3. `x-official` (API رسمی توییتر v2 — پرداخت به ازای مصرف Pay-per-use)
-  4. `twitterapi-io` (سرویس شخص ثالث twitterapi.io — پرداخت به ازای هر آیتم)
-- **موتور هوش مصنوعی Gemini (سمت سرور):**
-  - نمره‌دهی اهمیت از ۰ تا ۱۰ به همراه توضیح کوتاه فارسی
-  - ترجمه روان فارسی پست‌های غیرفارسی
-  - تحلیل احساسات (مثبت / منفی / خنثی) و استخراج برچسب‌های موضوعی
-  - کلاسترینگ (دسته‌بندی خودکار پست‌های ۲۴ ساعت اخیر بر اساس رویداد مشترک)
-  - تولید دوره‌ای و درخواستی خلاصه‌های تحلیلی (Digests)
-  - امنیت کامل در برابر حملات تزریق پرامپت (Prompt Injection Defenses)
-- **سیستم زمان‌بندی و پایش پیشرفته (In-Process Scheduler):**
-  - تنظیم تناوب به دقیقه و ساعت با مقادیر پیش‌فرض (15m, 30m, 1h, ...)
-  - ارث‌بری زمان‌بندی (تنظیمات سراسری ← گروه موضوعی ← منبع اختصاصی)
-  - اعمال خودکار کف زمانی مجاز ارائه‌دهنده‌ها (Provider Floors) جهت جلوگیری از قفل شدن اکانت
-  - اعمال جیتر تصادفی (±۲۰٪) جهت جلوگیری از پایش هم‌زمان
-  - ساعات و روزهای کاری فعال (Active Hours & Timezones)
-  - دکمه‌های «پایش فوری» و شبیه‌سازی «Dry Run» به همراه مقایسه هزینه
-- **کنترل هزینه (Cost Control):**
-  - سقف بودجه ماهانه مجزا برای هر ارائه‌دهنده و کل سامانه
-  - کلید قطع اضطراری (Kill-Switch) در صورت رسیدن به سقف بودجه
-  - ثبت دقیق تمام فراخوانی‌ها، تعداد توییت‌ها و محاسبه دلاری هزینه‌ها
-- **رابط کاربری مدرن، فارسی و راست‌چین (RTL):**
-  - فونت استاندارد وزیرمتن (Vazirmatn)
-  - تاریخ‌های شمسی به همراه نمایش تاریخ میلادی در تولتیپ
-  - کلیدهای میانبر سریع کیبورد (`j`/`k` پیمایش، `m` خوانده‌شده، `b` نشان، `o` باز کردن در X، `/` جستجو)
-  - به‌روزرسانی لحظه‌ای (SSE) و تغییر عنوان تب مرورگر برای پست‌های جدید
-  - خروجی‌گیری به فرمت‌های CSV و JSON
+> **Note:** The user interface is in Persian (Farsi) with RTL layout, Jalali (Solar Hijri) dates, and Persian AI output (summaries, translations, explanations).
 
 ---
 
-## ۲. راه‌اندازی سریع با Docker Compose (توصیه‌شده)
+## 1. Key Features
 
-این پروژه شامل دو کانتینر هماهنگ است:
-1. `app`: برنامه فول‌استک Node.js 22 + React
-2. `scraper`: سایدکار پایتون ۳.۱۲ با FastAPI و `twscrape` که در شبکه داخلی داکر بدون باز کردن پورت به بیرون اجرا می‌شود.
+- **Four pluggable data providers (adapters):**
+  1. `twscrape` — local sidecar using a dedicated account (**free, default**)
+  2. `nitter-rss` — public Nitter RSS feeds with server rotation (**free, automatic fallback**)
+  3. `x-official` — official X API v2 (pay-per-use)
+  4. `twitterapi-io` — third-party twitterapi.io service (pay-per-item)
+- **Server-side AI engine (Gemini / OpenAI / OpenRouter):**
+  - Importance score from 0 to 10 with a short explanation
+  - Fluent Persian translation of non-Persian posts
+  - Sentiment analysis (positive / negative / neutral) and topic-tag extraction
+  - Clustering of posts from the last 24 hours into shared events
+  - Periodic and on-demand analytical digests
+  - Prompt-injection defenses
+  - The AI provider, model, and API keys can be changed from the Settings page; environment variables act as defaults
+- **Built-in scheduler:**
+  - Configurable polling intervals in minutes and hours (15m, 30m, 1h, ...)
+  - Schedule inheritance: global settings → topic group → individual source
+  - Automatic per-provider minimum intervals (provider floors) to avoid account lockouts
+  - Random jitter (±20%) to avoid synchronized polling
+  - Active hours, days, and timezones
+  - "Poll now" and "Dry Run" buttons with cost comparison
+- **Cost control:**
+  - Separate monthly budget caps per provider and for the whole system
+  - Kill-Switch that halts polling when a budget cap is reached
+  - Detailed logging of every call, tweet count, and dollar cost
+- **Modern RTL Persian UI:**
+  - Vazirmatn font
+  - Jalali dates with Gregorian dates in tooltips
+  - Keyboard shortcuts (`j`/`k` navigate, `m` mark read, `b` bookmark, `o` open in X, `/` search)
+  - Real-time updates (SSE) and browser tab title changes for new posts
+  - CSV and JSON export
+
+---
+
+## 2. Quick Start with Docker Compose (Recommended)
+
+The project consists of two cooperating containers:
+1. `app`: the full-stack Node.js 22 + React application
+2. `scraper`: a Python 3.12 sidecar running FastAPI and `twscrape`, reachable only on the internal Docker network (no port exposed to the host)
 
 ```bash
-# ۱. کلون پروژه و ورود به دایرکتوری
+# 1. Clone the project and enter the directory
 git clone <repo_url>
 cd xmonitor
 
-# ۲. ایجاد فایل متغیرهای محیطی
+# 2. Create the environment file
 cp .env.example .env
 
-# ۳. تولید رمز عبور هش‌شده ادمین
+# 3. Generate a hashed admin password
 npm run hash-password your_secure_password
-# مقدار خروجی را در ADMIN_PASSWORD_HASH فایل .env قرار دهید
+# Put the output in ADMIN_PASSWORD_HASH in .env
 
-# ۴. اجرای کامل سرویس‌ها
+# 4. Start all services
 docker compose up -d --build
 ```
 
-پس از بالا آمدن کانتینرها، پنل در آدرس `http://localhost:3000` در دسترس خواهد بود.
+Once the containers are up, the dashboard is available at `http://localhost:3000`.
 
-> **توصیه سرور:** پیشنهاد می‌شود برنامه را روی یک سرور مجازی (VPS) در خارج از کشور که آی‌پی دیتاسنتری آن توسط کلودفلر/توییتر مسدود نشده باشد اجرا کنید.
-
----
-
-## ۳. نحوه استخراج کوکی‌های حساب اختصاصی (`twscrape`)
-
-ارائه‌دهنده پیش‌فرض `twscrape` برای دریافت توییت‌ها بدون نیاز به کلید API رسمی به یک حساب توییتر (ترجیحاً اکانت Burner/تست) نیاز دارد.
-
-1. در مرورگر وارد اکانت اختصاصی خود در سایت `https://x.com` شوید.
-2. کلید `F12` را فشار دهید تا پنجره Developer Tools باز شود.
-3. به تب **Application** (در فایرفاکس **Storage**) بروید.
-4. در منوی سمت چپ بخش **Cookies** را باز کرده و دامنه `https://x.com` را انتخاب کنید.
-5. دو مقدار زیر را کپی کنید:
-   - `auth_token`: رشته‌ای حدوداً ۴۰ کاراکتری
-   - `ct0`: توکن CSRF حدوداً ۱۶۰ کاراکتری
-6. در منوی پنل به بخش **حساب‌های اسکرپر** بروید و روی **افزودن حساب جدید** کلیک کرده و مقادیر را وارد کنید.
-
-> **نکته امنیتی:** این کوکی‌ها مستقیماً به سایدکار ارسال شده و هرگز در دیتابیس Node یا لاگ‌ها ذخیره نمی‌شوند.
+> **Server recommendation:** Run the app on a VPS outside Iran whose datacenter IP is not blocked by Cloudflare/X.
 
 ---
 
-## ۴. پیکربندی ارائه‌دهنده Nitter RSS
+## 3. Extracting Cookies for the Dedicated Account (`twscrape`)
 
-سرورهای عمومی Nitter کاملاً رایگان هستند و به هیچ حسابی نیاز ندارند. در بخش **تنظیمات سامانه** می‌توانید لیست سرورها را ویرایش کنید:
+The default `twscrape` provider fetches tweets without an official API key, but it needs an X account (preferably a burner/test account).
+
+1. Log in to your dedicated account at `https://x.com` in your browser.
+2. Press `F12` to open Developer Tools.
+3. Go to the **Application** tab (**Storage** in Firefox).
+4. In the left sidebar, expand **Cookies** and select `https://x.com`.
+5. Copy these two values:
+   - `auth_token`: a string of roughly 40 characters
+   - `ct0`: the CSRF token, roughly 160 characters
+6. In the dashboard menu, open **Scraper Accounts** (حساب‌های اسکرپر), click **Add Account**, and enter the values.
+
+> **Security note:** These cookies are sent directly to the sidecar and are never stored in the Node database or logs.
+
+---
+
+## 4. Configuring the Nitter RSS Provider
+
+Public Nitter instances are completely free and require no account. You can edit the server list in **System Settings**:
 
 ```text
 https://nitter.privacydev.net
@@ -93,53 +96,67 @@ https://nitter.poast.org
 https://nitter.projectsegfau.lt
 ```
 
-سامانه به صورت خودکار سلامت سرورها را بررسی کرده و در صورت بروز خطا تا ۱ ساعت سرور دارای مشکل را از چرخه خارج می‌کند.
+The system automatically health-checks the instances and removes a failing instance from rotation for up to 1 hour.
 
 ---
 
-## ۵. متغیرهای محیطی (`.env`)
+## 5. Environment Variables (`.env`)
 
-| متغیر | اجباری | توضیحات |
+| Variable | Required | Description |
 | :--- | :---: | :--- |
-| `PORT` | خیر | پورت سرور (پیش‌فرض: ۳۰۰۰) |
-| `DATABASE_PATH` | خیر | مسیر فایل دیتابیس SQLite |
-| `ADMIN_USERNAME` | بله | نام کاربری ادمین (پیش‌فرض: admin) |
-| `ADMIN_PASSWORD_HASH` | بله | هش scrypt رمز عبور تولیدشده با `npm run hash-password` |
-| `SESSION_SECRET` | بله | کلید رمزنگاری نشست کاربری (حداقل ۳۲ کاراکتر) |
-| `GEMINI_API_KEY` | بله | کلید دسترسی به هوش مصنوعی Google Gemini |
-| `SIDECAR_URL` | بله | آدرس سایدکار (در داکر: `http://scraper:8000`) |
-| `SIDECAR_SHARED_SECRET` | بله | کلید احراز هویت مشترک بین Node و سایدکار پایتون |
-| `X_BEARER_TOKEN` | خیر | کلید API رسمی توییتر v2 |
-| `TWITTERAPI_IO_KEY` | خیر | کلید سرویس twitterapi.io |
-| `TELEGRAM_BOT_TOKEN` | خیر | توکن ربات تلگرام جهت ارسال هشدارها |
-| `TELEGRAM_CHAT_ID` | خیر | شناسه چت یا کانال تلگرام برای دریافت اعلان‌ها |
-| `TZ` | خیر | منطقه زمانی پیش‌فرض (Asia/Tehran) |
+| `PORT` | No | Server port (default: 3000) |
+| `DATABASE_PATH` | No | Path to the SQLite database file |
+| `ADMIN_USERNAME` | Yes | Admin username (default: `admin`) |
+| `ADMIN_PASSWORD_HASH` | Yes | scrypt hash of the admin password, generated with `npm run hash-password` |
+| `SESSION_SECRET` | Yes | Session encryption key (at least 32 characters) |
+| `GEMINI_API_KEY` | Yes* | Google Gemini API key (default AI provider) |
+| `OPENAI_API_KEY` | No | API key for OpenAI or any OpenAI-compatible endpoint |
+| `OPENAI_BASE_URL` | No | Base URL for the OpenAI-compatible API (default: `https://api.openai.com/v1`) |
+| `OPENAI_MODEL` | No | OpenAI model name (default: `gpt-4o-mini`) |
+| `OPENROUTER_API_KEY` | No | OpenRouter API key |
+| `OPENROUTER_MODEL` | No | OpenRouter model name (default: `openai/gpt-4o-mini`) |
+| `SIDECAR_URL` | Yes | Sidecar URL (in Docker: `http://scraper:8000`) |
+| `SIDECAR_SHARED_SECRET` | Yes | Shared authentication secret between Node and the Python sidecar |
+| `X_BEARER_TOKEN` | No | Official X API v2 bearer token |
+| `TWITTERAPI_IO_KEY` | No | twitterapi.io API key |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token for sending alerts |
+| `TELEGRAM_CHAT_ID` | No | Telegram chat or channel ID for notifications |
+| `TZ` | No | Default timezone (default: `Asia/Tehran`) |
+
+\* Required only when Gemini is the selected AI provider. If you use OpenAI or OpenRouter, set the matching key instead (or enter it in Settings).
+
+> **Docker note:** `docker-compose.yml` only forwards the variables listed in its `environment` section to the `app` container. To use the OpenAI/OpenRouter variables via `.env`, add them there, or configure the AI provider from the Settings page instead.
 
 ---
 
-## ۶. اجرای محلی برای توسعه (Local Development)
+## 6. Local Development
 
 ```bash
-# نصب وابستگی‌ها
+# Install dependencies
 npm install
 
-# اجرای تست‌های منطق برنامه
+# Run the logic tests
 npm test
 
-# اجرای سرور توسعه (Node Express + Vite Middleware)
+# Type-check
+npm run lint
+
+# Start the dev server (Node Express + Vite middleware)
 npm run dev
 ```
 
+To build the frontend for production: `npm run build`, then `npm start`.
+
 ---
 
-## ۷. افزودن ارائه‌دهنده داده جدید (Custom Provider)
+## 7. Adding a New Data Provider (Custom Provider)
 
-برای اضافه کردن یک ارائه‌دهنده جدید به سیستم:
-1. در مسیر `server/providers/` یک فایل جدید بسازید (مانند `my-provider.ts`).
-2. اینترفیس `DataProvider` موجود در `server/providers/types.ts` را پیاده‌سازی کنید:
+To add a new provider to the system:
+1. Create a new file in `server/providers/` (for example `my-provider.ts`).
+2. Implement the `DataProvider` interface from `server/providers/types.ts`:
    - `resolveAccount(username)`
    - `fetchNew(source, state)`
    - `healthCheck()`
    - `estimateCost(usage)`
-3. کلاس ساخته‌شده را در `server/providers/index.ts` در تابع سازنده `ProviderRegistry` رجیستر کنید (`this.register(new MyProvider())`).
-4. نام ارائه‌دهنده بلافاصله در تنظیمات و منوی انتخاب منبع ظاهر می‌شود بدون نیاز به تغییر در سایر بخش‌های برنامه.
+3. Register your class in the `ProviderRegistry` constructor in `server/providers/index.ts` (`this.register(new MyProvider())`).
+4. The provider name immediately appears in Settings and the source-selection menu, with no changes needed elsewhere in the app.
