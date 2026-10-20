@@ -252,6 +252,16 @@ export function initDatabase() {
       locked_until TEXT,
       last_attempt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS scraper_accounts (
+      username TEXT PRIMARY KEY,
+      auth_token TEXT NOT NULL,
+      ct0 TEXT NOT NULL,
+      active INTEGER DEFAULT 1,
+      last_error TEXT,
+      locks_json TEXT DEFAULT '[]',
+      created_at TEXT NOT NULL
+    );
   `);
 
   initDefaultSettings();
@@ -265,8 +275,16 @@ function initDefaultSettings() {
     global_jitter_percent: '20',
     timezone: 'Asia/Tehran',
     theme: 'dark',
+    language: 'en',
     retention_days: '30',
     auto_nitter_fallback: '1',
+
+    // User Profile Defaults
+    profile_username: process.env.ADMIN_USERNAME || 'admin',
+    profile_display_name: 'Admin User',
+    profile_email: 'admin@xmonitor.io',
+    profile_avatar: '',
+    profile_password_hash: process.env.ADMIN_PASSWORD_HASH || '',
 
     // Prices
     'price_x_official_tweet_read': '0.005',
@@ -303,10 +321,10 @@ function initDefaultSettings() {
 
     // Nitter instances (one URL per line)
     nitter_instances: [
-      'https://nitter.jaydenha.uk',
-      'https://nitter.tiekoetter.com',
-      'https://nitter.space',
-      'https://nitter.privacydev.net'
+      'https://nitter.poast.org',
+      'https://nitter.privacydev.net',
+      'https://xcancel.com',
+      'https://nitter.space'
     ].join('\n'),
 
     // Digest Schedule
@@ -324,4 +342,33 @@ function initDefaultSettings() {
       insertStmt.run(key, val, new Date().toISOString());
     }
   }
+
+  // Upgrade deprecated Gemini model names if present in existing DB
+  const currentAiModel = (getStmt.get('ai_model') as { value?: string } | undefined)?.value;
+  if (
+    currentAiModel &&
+    (currentAiModel.startsWith('gemini-1.5') ||
+      currentAiModel.startsWith('gemini-2.0') ||
+      currentAiModel.startsWith('gemini-2.5'))
+  ) {
+    db.prepare("UPDATE settings SET value = 'gemini-3.8-flash', updated_at = ? WHERE key = 'ai_model'").run(
+      new Date().toISOString()
+    );
+  }
+
+  // Clear stale sidecar fetch errors on sources and re-queue timed-out AI enrichments
+  try {
+    db.prepare(`
+      UPDATE sources
+      SET last_error = NULL, consecutive_failures = 0
+      WHERE last_error LIKE '%fetch failed%' OR last_error LIKE '%Timeout%'
+    `).run();
+
+    db.prepare(`
+      UPDATE posts
+      SET ai_status = 'pending'
+      WHERE importance_reason LIKE '%زمان انتظار%' OR importance_reason LIKE '%خطا در پردازش%'
+    `).run();
+  } catch {}
 }
+

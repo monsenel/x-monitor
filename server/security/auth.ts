@@ -104,9 +104,37 @@ export function recordLoginAttempt(ip: string, success: boolean) {
   `).run(ip, attempts, lockedUntil, now);
 }
 
+export interface AdminProfile {
+  username: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+  passwordHash: string;
+}
+
+export function getAdminProfile(): AdminProfile {
+  const rows = db
+    .prepare(
+      "SELECT key, value FROM settings WHERE key IN ('profile_username', 'profile_display_name', 'profile_email', 'profile_avatar', 'profile_password_hash')"
+    )
+    .all() as { key: string; value: string }[];
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    map[r.key] = r.value;
+  }
+  return {
+    username: map['profile_username'] || ADMIN_USERNAME,
+    displayName: map['profile_display_name'] || 'Admin User',
+    email: map['profile_email'] || 'admin@xmonitor.io',
+    avatarUrl: map['profile_avatar'] || '',
+    passwordHash: map['profile_password_hash'] || ADMIN_PASSWORD_HASH || '',
+  };
+}
+
 // Helper to create admin session for single-user dev/preview mode
 function createAutoAdminSession(req: Request, res: Response): string {
-  const adminUser = process.env.ADMIN_USERNAME || 'admin';
+  const profile = getAdminProfile();
+  const adminUser = profile.username;
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 86400 * 1000).toISOString();
   const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
@@ -144,7 +172,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       (req as any).user = { id: adminUser, username: adminUser };
       return next();
     }
-    return res.status(401).json({ error: 'احراز هویت انجام نشده است.' });
+    return res.status(401).json({ error: 'Authentication required.' });
   }
 
   const sessionId = unsignSession(rawToken) || (rawToken.includes('.') ? rawToken.split('.')[0] : rawToken);
@@ -156,10 +184,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       (req as any).user = { id: adminUser, username: adminUser };
       return next();
     }
-    return res.status(401).json({ error: 'نشست کاربری نامعتبر یا منقضی شده است.' });
+    return res.status(401).json({ error: 'Session expired or invalid.' });
   }
 
-  (req as any).user = { id: session.user_id, username: ADMIN_USERNAME };
+  const profile = getAdminProfile();
+  (req as any).user = { id: session.user_id, username: profile.username };
   next();
 }
 

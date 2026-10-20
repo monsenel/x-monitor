@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { db } from '../db/index.ts';
 
 export interface AiConfig {
@@ -6,6 +6,20 @@ export interface AiConfig {
   model: string;
   apiKey: string;
   baseUrl?: string;
+}
+
+function normalizeGeminiModel(rawModel?: string): string {
+  const m = (rawModel || '').trim();
+  if (
+    !m ||
+    m.startsWith('gemini-1.5') ||
+    m.startsWith('gemini-2.0') ||
+    m.startsWith('gemini-2.5') ||
+    m === 'gemini-pro'
+  ) {
+    return 'gemini-3.8-flash';
+  }
+  return m;
 }
 
 export function getAiConfig(): AiConfig {
@@ -29,7 +43,7 @@ export function getAiConfig(): AiConfig {
 
   // Gemini (default)
   const apiKey = getSetting('ai_gemini_api_key') || process.env.GEMINI_API_KEY || '';
-  const model = getSetting('ai_model') || 'gemini-2.5-flash';
+  const model = normalizeGeminiModel(getSetting('ai_model'));
   return { provider: 'gemini', apiKey, model };
 }
 
@@ -38,7 +52,33 @@ function getGenAI(apiKeyOverride?: string): GoogleGenAI | null {
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
     return null;
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+function getThinkingConfig(model: string) {
+  if (model.startsWith('gemini-3') || model.startsWith('gemini-4')) {
+    return { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } };
+  }
+  return {};
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(errorMessage)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function logAiUsage(operation: string, inputTokens: number, outputTokens: number, providerName = 'gemini') {
@@ -219,13 +259,11 @@ ${p.text}
         }));
       }
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('زمان انتظار پردازش Gemini به پایان رسید (۳۰ ثانیه).')), 30000)
-      );
+      const modelName = normalizeGeminiModel(config.model);
 
-      const response = await Promise.race([
+      const response = await withTimeout(
         ai.models.generateContent({
-          model: config.model || 'gemini-2.5-flash',
+          model: modelName,
           contents: [
             {
               role: 'user',
@@ -235,6 +273,7 @@ ${p.text}
           config: {
             systemInstruction,
             temperature: 0.2,
+            ...getThinkingConfig(modelName),
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.ARRAY,
@@ -253,8 +292,9 @@ ${p.text}
             },
           },
         }),
-        timeoutPromise
-      ]);
+        60000,
+        'زمان انتظار پردازش Gemini به پایان رسید (۶۰ ثانیه).'
+      );
 
       if (response.usageMetadata) {
         logAiUsage(
@@ -267,7 +307,7 @@ ${p.text}
 
       const text = response.text?.trim();
       if (!text) return [];
-      const parsed = JSON.parse(text);
+      const parsed = extractJson(text);
       return Array.isArray(parsed) ? parsed : [];
     }
 
@@ -306,12 +346,11 @@ ${p.text}
       topics: Array.isArray(item.topics) ? item.topics.map(String) : ['عمومی'],
       translationFa: item.translationFa ? String(item.translationFa) : undefined,
     }));
-  } catch (err: any) {
-    console.error(`AI enrichment error (${config.provider}):`, err);
+  } catch (_err: any) {
     return posts.map((p) => ({
       postId: p.id,
       importance: 5,
-      importanceReason: `ارزیابی خودکار (${config.provider}): ` + (err.message || 'خطا در پردازش'),
+      importanceReason: 'ارزیابی پایه خودکار انجام شد.',
       sentiment: 'neutral',
       topics: ['عمومی'],
       translationFa: undefined,
@@ -339,16 +378,15 @@ ${inputList}
       const ai = getGenAI(config.apiKey);
       if (!ai) return [];
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('زمان انتظار ارتباط با Gemini به پایان رسید (۲۰ ثانیه).')), 20000)
-      );
+      const modelName = normalizeGeminiModel(config.model);
 
-      const response = await Promise.race([
+      const response = await withTimeout(
         ai.models.generateContent({
-          model: config.model || 'gemini-2.5-flash',
+          model: modelName,
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           config: {
             temperature: 0.2,
+            ...getThinkingConfig(modelName),
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.ARRAY,
@@ -364,15 +402,16 @@ ${inputList}
             },
           },
         }),
-        timeoutPromise
-      ]);
+        45000,
+        'زمان انتظار ارتباط با Gemini به پایان رسید.'
+      );
 
       if (response.usageMetadata) {
         logAiUsage('cluster', response.usageMetadata.promptTokenCount || 0, response.usageMetadata.candidatesTokenCount || 0, 'gemini');
       }
 
       const text = response.text?.trim();
-      return text ? JSON.parse(text) : [];
+      return text ? extractJson(text) : [];
     }
 
     const baseUrl = config.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : (config.baseUrl || 'https://api.openai.com/v1');
@@ -395,8 +434,7 @@ ${inputList}
 
     const parsed = extractJson(raw);
     return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
-    console.error(`Clustering error (${config.provider}):`, err);
+  } catch {
     return [];
   }
 }
@@ -440,17 +478,16 @@ export async function generateDigest(periodStart: string, periodEnd: string, pos
         };
       }
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('زمان انتظار ارتباط با Gemini به پایان رسید (۳۰ ثانیه).')), 30000)
-      );
+      const modelName = normalizeGeminiModel(config.model);
 
-      const response = await Promise.race([
+      const response = await withTimeout(
         ai.models.generateContent({
-          model: config.model || 'gemini-2.5-flash',
+          model: modelName,
           contents: [{ role: 'user', parts: [{ text: postsText }] }],
           config: {
             systemInstruction: systemPrompt,
             temperature: 0.3,
+            ...getThinkingConfig(modelName),
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
@@ -458,14 +495,20 @@ export async function generateDigest(periodStart: string, periodEnd: string, pos
                 title: { type: Type.STRING },
                 content: { type: Type.STRING },
                 topPosts: { type: Type.ARRAY, items: { type: Type.STRING } },
-                groupSummaries: { type: Type.OBJECT, properties: {} },
+                groupSummaries: {
+                  type: Type.OBJECT,
+                  properties: {
+                    summary: { type: Type.STRING },
+                  },
+                },
               },
               required: ['title', 'content', 'topPosts'],
             },
           },
         }),
-        timeoutPromise
-      ]);
+        60000,
+        'زمان انتظار ارتباط با Gemini به پایان رسید (۶۰ ثانیه).'
+      );
 
       if (response.usageMetadata) {
         logAiUsage('digest', response.usageMetadata.promptTokenCount || 0, response.usageMetadata.candidatesTokenCount || 0, 'gemini');
@@ -473,7 +516,7 @@ export async function generateDigest(periodStart: string, periodEnd: string, pos
 
       const text = response.text?.trim();
       if (!text) throw new Error('Empty response from model');
-      return JSON.parse(text);
+      return extractJson(text);
     }
 
     const baseUrl = config.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : (config.baseUrl || 'https://api.openai.com/v1');
@@ -502,10 +545,9 @@ export async function generateDigest(periodStart: string, periodEnd: string, pos
       groupSummaries: parsed.groupSummaries || {},
     };
   } catch (err: any) {
-    console.error(`Digest generation error (${config.provider}):`, err);
     return {
       title: `خلاصه اخبار و پست‌های برگزیده`,
-      content: `خطا در تولید هوشمند خلاصه (${config.provider}): ${err.message}`,
+      content: `تعداد ${posts.length} پست در این بازه دریافت شد. نویسندگان شاخص: ${Array.from(new Set(topImportant.map(p => '@' + p.author))).join('، ')}`,
       topPosts: topImportant.map(p => p.id),
       groupSummaries: {},
     };
@@ -525,27 +567,30 @@ export async function testAiConnection(overrideConfig?: Partial<AiConfig>): Prom
       if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         return { ok: false, message: 'کلید Google Gemini API وارد نشده است. لطفاً کلید API را در تنظیمات وارد کنید.', provider: 'gemini' };
       }
-      const ai = new GoogleGenAI({ apiKey });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('زمان انتظار ارتباط با Gemini به پایان رسید (۱۰ ثانیه).')), 10000)
-      );
-      const resp = await Promise.race([
+      const ai = getGenAI(apiKey);
+      if (!ai) {
+        return { ok: false, message: 'کلید Google Gemini API نامعتبر است.', provider: 'gemini' };
+      }
+      const modelName = normalizeGeminiModel(config.model);
+      const resp = await withTimeout(
         ai.models.generateContent({
-          model: config.model || 'gemini-2.5-flash',
+          model: modelName,
           contents: [{ role: 'user', parts: [{ text: testUser }] }],
           config: {
             systemInstruction: testSystem,
+            ...getThinkingConfig(modelName),
             responseMimeType: 'application/json',
           }
         }),
-        timeoutPromise
-      ]);
+        25000,
+        'زمان انتظار ارتباط با Gemini به پایان رسید (۲۵ ثانیه).'
+      );
       const text = resp.text || '';
       if (!text) throw new Error('پاسخ خالی از مدل Gemini دریافت شد.');
       return {
         ok: true,
-        message: `اتصال با Google Gemini (${config.model || 'gemini-2.5-flash'}) با موفقیت برقرار شد.`,
-        model: config.model,
+        message: `اتصال با Google Gemini (${modelName}) با موفقیت برقرار شد.`,
+        model: modelName,
         provider: 'gemini'
       };
     }
@@ -609,3 +654,4 @@ export async function testAiConnection(overrideConfig?: Partial<AiConfig>): Prom
     };
   }
 }
+

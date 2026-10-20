@@ -3,6 +3,7 @@ import { Post, Source, SourceGroup } from '../../types.ts';
 import { PostCard } from './PostCard.tsx';
 import { apiRequest } from '../../utils/api.ts';
 import { useRealtime } from '../../context/RealtimeContext.tsx';
+import { usePreferences } from '../../context/PreferencesContext.tsx';
 import { toPersianDigits } from '../../utils/date.ts';
 import {
   Filter,
@@ -11,7 +12,6 @@ import {
   Layers,
   Sparkles,
   ArrowUp,
-  RefreshCw,
   SearchX,
   Bookmark,
   Image as ImageIcon,
@@ -23,6 +23,7 @@ interface FeedViewProps {
 
 export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
   const { pendingNewPostsCount, clearPendingNewPosts } = useRealtime();
+  const { t } = usePreferences();
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -96,7 +97,6 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
   // Keyboard navigation: j/k, m, b, o
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts if focus is in input or textarea
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
         return;
       }
@@ -131,18 +131,14 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
         method: 'POST',
         body: JSON.stringify({ is_read: !current }),
       });
-      setPosts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, isRead: !current } : p))
-      );
+      setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, isRead: !current } : p)));
     } catch {}
   };
 
   const handleToggleBookmark = async (id: string, current: boolean) => {
     try {
       await apiRequest(`/api/posts/${id}/bookmark`, { method: 'POST' });
-      setPosts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, isBookmarked: !current } : p))
-      );
+      setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, isBookmarked: !current } : p)));
     } catch {}
   };
 
@@ -167,21 +163,17 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
     } catch {}
   };
 
-  const handleExport = (format: 'csv' | 'json') => {
-    window.open(`/api/posts/export?format=${format}`, '_blank');
-  };
-
   // Grouped clustered posts
   const clusteredGroups = React.useMemo(() => {
     if (!clusterViewMode) return [];
     const map = new Map<string, Post[]>();
     for (const p of posts) {
-      const key = p.clusterTitle || 'بدون کلاستر (پست‌های متفرقه)';
+      const key = p.clusterTitle || t('Uncategorized Posts', 'بدون کلاستر (پست‌های متفرقه)');
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(p);
     }
     return Array.from(map.entries()).map(([title, clusterPosts]) => ({ title, clusterPosts }));
-  }, [posts, clusterViewMode]);
+  }, [posts, clusterViewMode, t]);
 
   return (
     <div className="space-y-4">
@@ -194,7 +186,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
           >
             <ArrowUp className="w-4 h-4" />
             <span>
-              {toPersianDigits(pendingNewPostsCount)} پست جدید در دسترس است — بارگذاری در بالا
+              {t(
+                `${pendingNewPostsCount} new posts available — Load at top`,
+                `${toPersianDigits(pendingNewPostsCount)} پست جدید در دسترس است — بارگذاری در بالا`
+              )}
             </span>
           </button>
         </div>
@@ -204,9 +199,9 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
         {/* Left Filters */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium ml-1">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium me-1">
             <Filter className="w-4 h-4 text-cyan-400" />
-            <span>فیلترها:</span>
+            <span>{t('Filters:', 'فیلترها:')}</span>
           </div>
 
           {/* Group Filter */}
@@ -215,7 +210,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
             onChange={(e) => setSelectedGroupId(e.target.value)}
             className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
           >
-            <option value="">همه گروه‌ها</option>
+            <option value="">{t('All Groups', 'همه گروه‌ها')}</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
@@ -229,7 +224,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
             onChange={(e) => setSelectedSourceId(e.target.value)}
             className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
           >
-            <option value="">همه منابع</option>
+            <option value="">{t('All Sources', 'همه منابع')}</option>
             {sources.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.display_name || s.value}
@@ -247,7 +242,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
             }`}
           >
             <CheckCheck className="w-3.5 h-3.5" />
-            <span>فقط خوانده‌نشده</span>
+            <span>{t('Unread Only', 'فقط خوانده‌نشده')}</span>
           </button>
 
           {/* Bookmarked Only */}
@@ -260,7 +255,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
             }`}
           >
             <Bookmark className="w-3.5 h-3.5" />
-            <span>نشان‌شده‌ها</span>
+            <span>{t('Saved', 'نشان‌شده‌ها')}</span>
           </button>
 
           {/* Media Only */}
@@ -273,7 +268,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5" />
-            <span>رسانه‌دار</span>
+            <span>{t('With Media', 'رسانه‌دار')}</span>
           </button>
 
           {/* Min Importance */}
@@ -282,9 +277,9 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
             onChange={(e) => setMinImportance(Number(e.target.value))}
             className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
           >
-            <option value="0">اهمیت: همه</option>
-            <option value="6">اهمیت ≥ ۶</option>
-            <option value="8">اهمیت ≥ ۸ (فوری)</option>
+            <option value="0">{t('Importance: All', 'اهمیت: همه')}</option>
+            <option value="6">{t('Importance ≥ 6', 'اهمیت ≥ ۶')}</option>
+            <option value="8">{t('Importance ≥ 8 (Critical)', 'اهمیت ≥ ۸ (فوری)')}</option>
           </select>
         </div>
 
@@ -298,37 +293,39 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
                 ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
                 : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
             }`}
-            title="دسته‌بندی پست‌های رویدادهای مشترک ۲۴ ساعت اخیر"
+            title={t('Group related event posts from the last 24h', 'دسته‌بندی پست‌های رویدادهای مشترک ۲۴ ساعت اخیر')}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>نمای کلاستر</span>
+            <span>{t('Cluster View', 'نمای کلاستر')}</span>
           </button>
 
           {/* Mark all as read */}
           <button
             onClick={handleMarkAllRead}
             className="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 transition-colors flex items-center gap-1.5"
-            title="علامت‌گذاری فیلتر جاری به عنوان خوانده‌شده"
+            title={t('Mark current filtered posts as read', 'علامت‌گذاری فیلتر جاری به عنوان خوانده‌شده')}
           >
             <CheckCheck className="w-3.5 h-3.5 text-cyan-400" />
-            <span>خواندن همه</span>
+            <span>{t('Mark All Read', 'خواندن همه')}</span>
           </button>
 
-          {/* Export Dropdown */}
+          {/* Export Links */}
           <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden text-xs">
-            <button
-              onClick={() => handleExport('csv')}
-              className="px-2.5 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1 border-l border-slate-800"
+            <a
+              href="/api/posts/export?format=csv"
+              download
+              className="px-2.5 py-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors flex items-center gap-1 border-e border-slate-800"
             >
               <Download className="w-3 h-3" />
               <span>CSV</span>
-            </button>
-            <button
-              onClick={() => handleExport('json')}
-              className="px-2.5 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            </a>
+            <a
+              href="/api/posts/export?format=json"
+              download
+              className="px-2.5 py-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
             >
               <span>JSON</span>
-            </button>
+            </a>
           </div>
         </div>
       </div>
@@ -355,9 +352,14 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
           <div className="w-12 h-12 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center mx-auto text-slate-400">
             <SearchX className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-200">هیچ پستی با فیلترهای انتخابی یافت نشد</h3>
+          <h3 className="text-base font-bold text-slate-200">
+            {t('No posts match the selected filters', 'هیچ پستی با فیلترهای انتخابی یافت نشد')}
+          </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            می‌توانید فیلترها را بازنشانی کنید یا در بخش «منابع پایش» منابع جدیدی اضافه فرمایید.
+            {t(
+              'Try resetting your filters or add new accounts and hashtags in Monitored Sources.',
+              'می‌توانید فیلترها را بازنشانی کنید یا در بخش «منابع پایش» منابع جدیدی اضافه فرمایید.'
+            )}
           </p>
         </div>
       ) : clusterViewMode ? (
@@ -371,7 +373,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
                   <h4 className="font-bold text-sm text-slate-200">{group.title}</h4>
                 </div>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
-                  {toPersianDigits(group.clusterPosts.length)} پست
+                  {toPersianDigits(group.clusterPosts.length)} {t('posts', 'پست')}
                 </span>
               </div>
               <div className="space-y-3">
@@ -404,14 +406,16 @@ export const FeedView: React.FC<FeedViewProps> = ({ searchQuery }) => {
         </div>
       )}
 
-      {/* Keyboard navigation helper pill */}
+      {/* Keyboard navigation helper */}
       <div className="text-center pt-4 pb-2 text-[11px] text-slate-500">
-        راهنمای کیبورد: <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">j</kbd>/
-        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">k</kbd> بعدی/قبلی •{' '}
-        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">m</kbd> خوانده‌شده •{' '}
-        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">b</kbd> نشان •{' '}
-        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">o</kbd> باز کردن در X
+        {t('Keyboard Shortcuts:', 'راهنمای کیبورد:')}{' '}
+        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">j</kbd>/
+        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">k</kbd> {t('Next/Prev', 'بعدی/قبلی')} •{' '}
+        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">m</kbd> {t('Read/Unread', 'خوانده‌شده')} •{' '}
+        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">b</kbd> {t('Save', 'نشان')} •{' '}
+        <kbd className="px-1 py-0.5 bg-slate-800 rounded font-mono">o</kbd> {t('Open on X', 'باز کردن در X')}
       </div>
     </div>
   );
 };
+

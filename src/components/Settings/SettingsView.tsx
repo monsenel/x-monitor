@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../../utils/api.ts';
 import { ProviderInfo } from '../../types.ts';
+import { usePreferences } from '../../context/PreferencesContext.tsx';
 import {
   Settings,
-  ShieldCheck,
   DollarSign,
   Sparkles,
   Database,
@@ -13,18 +13,19 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
-  Clock,
   Layers,
   Cpu,
-  Key,
   Globe,
-  Server,
   Eye,
   EyeOff,
   ExternalLink,
+  Sun,
+  Moon,
+  Languages,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
+  const { t, lang, setLang, theme, setTheme, isRtl } = usePreferences();
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,6 +34,7 @@ export const SettingsView: React.FC = () => {
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [statusBanner, setStatusBanner] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -60,22 +62,36 @@ export const SettingsView: React.FC = () => {
 
   const handleSave = async () => {
     setIsSaving(true);
+    setStatusBanner(null);
     try {
       await apiRequest('/api/settings', {
         method: 'PUT',
         body: JSON.stringify(settings),
       });
-      alert('تنظیمات با موفقیت ذخیره شد.');
+      setStatusBanner({
+        ok: true,
+        message: t('Settings saved successfully.', 'تنظیمات با موفقیت ذخیره شد.'),
+      });
       loadData();
     } catch (err: any) {
-      alert(`خطا در ذخیره تنظیمات: ${err.message}`);
+      setStatusBanner({
+        ok: false,
+        message: t(`Failed to save settings: ${err.message}`, `خطا در ذخیره تنظیمات: ${err.message}`),
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleTestProvider = async (providerId: string) => {
-    setTestResults((prev) => ({ ...prev, [providerId]: { ok: false, message: 'در حال بررسی اتصال...', testing: true } }));
+    setTestResults((prev) => ({
+      ...prev,
+      [providerId]: {
+        ok: false,
+        message: t('Testing connection...', 'در حال بررسی اتصال...'),
+        testing: true,
+      },
+    }));
     try {
       const res = await apiRequest<{ ok: boolean; message: string }>(`/api/providers/${providerId}/test`, {
         method: 'POST',
@@ -93,7 +109,7 @@ export const SettingsView: React.FC = () => {
       const provider = settings['ai_provider'] || 'gemini';
       const body: any = { provider };
       if (provider === 'gemini') {
-        body.model = settings['ai_model'] || 'gemini-2.5-flash';
+        body.model = settings['ai_model'] || 'gemini-3.8-flash';
         body.apiKey = settings['ai_gemini_api_key'];
       } else if (provider === 'openai') {
         body.baseUrl = settings['ai_openai_base_url'] || 'https://api.openai.com/v1';
@@ -110,26 +126,33 @@ export const SettingsView: React.FC = () => {
       });
       setAiTestResult(res);
     } catch (err: any) {
-      setAiTestResult({ ok: false, message: err.message || 'خطا در آزمون اتصال هوش مصنوعی' });
+      setAiTestResult({
+        ok: false,
+        message: err.message || t('AI connection test failed', 'خطا در آزمون اتصال هوش مصنوعی'),
+      });
     } finally {
       setAiTesting(false);
     }
   };
 
   const handleRetentionCleanup = async () => {
-    if (!confirm('آیا از اجرای پاکسازی پست‌های قدیمی (به جز نشان‌شده‌ها) اطمینان دارید؟')) return;
+    setStatusBanner(null);
     try {
       const res = await apiRequest<{ ok: boolean; message: string }>('/api/settings/retention-cleanup', {
         method: 'POST',
       });
-      alert(res.message);
+      setStatusBanner({ ok: true, message: res.message });
     } catch (err: any) {
-      alert(err.message);
+      setStatusBanner({ ok: false, message: err.message });
     }
   };
 
   if (isLoading) {
-    return <div className="p-12 text-center text-slate-500 text-xs">در حال بارگذاری تنظیمات...</div>;
+    return (
+      <div className="p-12 text-center text-slate-500 text-xs">
+        {t('Loading system settings...', 'در حال بارگذاری تنظیمات...')}
+      </div>
+    );
   }
 
   return (
@@ -139,42 +162,162 @@ export const SettingsView: React.FC = () => {
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Settings className="w-5 h-5 text-cyan-400" />
-            <span>تنظیمات سامانه، ارائه‌دهندگان و کنترل هزینه</span>
+            <span>
+              {t('System Settings, Providers & Cost Control', 'تنظیمات سامانه، ارائه‌دهندگان و کنترل هزینه')}
+            </span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            پیکربندی ارائه‌دهنده پیش‌فرض، نرخ‌ها، سقف بودجه ماهانه و کلید هوش مصنوعی
+            {t(
+              'Configure default data provider, unit pricing, monthly budget caps, appearance, and AI keys',
+              'پیکربندی ارائه‌دهنده پیش‌فرض، نرخ‌ها، سقف بودجه ماهانه و کلید هوش مصنوعی'
+            )}
           </p>
         </div>
 
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+          className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>{isSaving ? 'در حال ذخیره‌سازی...' : 'ذخیره تغییرات'}</span>
+          <span>{isSaving ? t('Saving...', 'در حال ذخیره‌سازی...') : t('Save Changes', 'ذخیره تغییرات')}</span>
         </button>
+      </div>
+
+      {statusBanner && (
+        <div
+          className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+            statusBanner.ok
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {statusBanner.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+            <span>{statusBanner.message}</span>
+          </div>
+          <button
+            onClick={() => setStatusBanner(null)}
+            className="text-slate-400 hover:text-white text-xs cursor-pointer"
+          >
+            {t('Dismiss', 'بستن')}
+          </button>
+        </div>
+      )}
+
+      {/* 0. Language & Theme Quick Section */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
+          <Languages className="w-4 h-4 text-cyan-400" />
+          <span>{t('Interface Language & Appearance', 'زبان رابط کاربری و ظاهر سامانه')}</span>
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="block text-slate-300 font-medium mb-2">
+              {t('Panel Language:', 'زبان پنل کاربری:')}
+            </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setLang('en');
+                  handleChange('language', 'en');
+                }}
+                className={`py-2.5 px-3 rounded-xl border font-bold transition-all cursor-pointer ${
+                  lang === 'en'
+                    ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                English (Default)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLang('fa');
+                  handleChange('language', 'fa');
+                }}
+                className={`py-2.5 px-3 rounded-xl border font-bold transition-all cursor-pointer ${
+                  lang === 'fa'
+                    ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                فارسی (راست‌چین)
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-medium mb-2">
+              {t('Color Theme:', 'پوسته رنگی (تم):')}
+            </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setTheme('dark');
+                  handleChange('theme', 'dark');
+                }}
+                className={`py-2.5 px-3 rounded-xl border font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Moon className="w-4 h-4" />
+                <span>{t('Dark Mode', 'حالت تیره (Dark)')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTheme('light');
+                  handleChange('theme', 'light');
+                }}
+                className={`py-2.5 px-3 rounded-xl border font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  theme === 'light'
+                    ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sun className="w-4 h-4" />
+                <span>{t('Light Mode', 'حالت روشن (Light)')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 1. Providers & Connections */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
         <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
           <Layers className="w-4 h-4 text-cyan-400" />
-          <span>ارائه‌دهندگان داده و آزمون اتصال</span>
+          <span>{t('Data Providers & Connection Tests', 'ارائه‌دهندگان داده و آزمون اتصال')}</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-slate-300 font-medium mb-1.5">ارائه‌دهنده پیش‌فرض سامانه:</label>
+            <label className="block text-xs text-slate-300 font-medium mb-1.5">
+              {t('Default Data Provider:', 'ارائه‌دهنده پیش‌فرض سامانه:')}
+            </label>
             <select
               value={settings['default_provider'] || 'twscrape'}
               onChange={(e) => handleChange('default_provider', e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             >
-              <option value="twscrape">twscrape (سایدکار محلی - رایگان و پیش‌فرض)</option>
-              <option value="nitter-rss">Nitter RSS (فید عمومی - رایگان)</option>
-              <option value="x-official">Official X API v2 (API رسمی - پولی)</option>
-              <option value="twitterapi-io">twitterapi.io (سرویس شخص ثالث - پولی)</option>
+              <option value="twscrape">
+                {t('twscrape (Local Sidecar - Free & Default)', 'twscrape (سایدکار محلی - رایگان و پیش‌فرض)')}
+              </option>
+              <option value="nitter-rss">
+                {t('Nitter RSS (Public Feed - Free)', 'Nitter RSS (فید عمومی - رایگان)')}
+              </option>
+              <option value="x-official">
+                {t('Official X API v2 (Paid)', 'Official X API v2 (API رسمی - پولی)')}
+              </option>
+              <option value="twitterapi-io">
+                {t('twitterapi.io (3rd-Party Paid)', 'twitterapi.io (سرویس شخص ثالث - پولی)')}
+              </option>
             </select>
           </div>
 
@@ -186,7 +329,12 @@ export const SettingsView: React.FC = () => {
                 onChange={(e) => handleChange('auto_nitter_fallback', e.target.checked ? '1' : '0')}
                 className="rounded bg-slate-950 border-slate-800 text-cyan-500"
               />
-              <span>تغییر خودکار به Nitter RSS در صورت ۳ شکست متوالی ارائه‌دهنده اصلی</span>
+              <span>
+                {t(
+                  'Automatically fall back to Nitter RSS after 3 consecutive failures',
+                  'تغییر خودکار به Nitter RSS در صورت ۳ شکست متوالی ارائه‌دهنده اصلی'
+                )}
+              </span>
             </label>
           </div>
         </div>
@@ -201,16 +349,17 @@ export const SettingsView: React.FC = () => {
                   <div>
                     <span className="font-bold text-xs text-slate-200">{p.name}</span>
                     <span className="text-[10px] text-slate-500 block">
-                      {p.isFree ? 'رایگان' : 'نیازمند شارژ مالی'} • {p.configured ? 'پیکربندی‌شده' : 'کلید تعریف‌نشده'}
+                      {p.isFree ? t('Free', 'رایگان') : t('Paid Credits', 'نیازمند شارژ مالی')} •{' '}
+                      {p.configured ? t('Configured', 'پیکربندی‌شده') : t('Key Not Set', 'کلید تعریف‌نشده')}
                     </span>
                   </div>
                   <button
                     onClick={() => handleTestProvider(p.id)}
                     disabled={test?.testing}
-                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1 disabled:opacity-50"
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                   >
                     <RefreshCw className={`w-3 h-3 ${test?.testing ? 'animate-spin' : ''}`} />
-                    <span>تست اتصال</span>
+                    <span>{t('Test Connection', 'تست اتصال')}</span>
                   </button>
                 </div>
 
@@ -236,12 +385,14 @@ export const SettingsView: React.FC = () => {
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
         <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
           <DollarSign className="w-4 h-4 text-emerald-400" />
-          <span>بودجه ماهانه و نرخ‌های واحد ارائه‌دهندگان (Cost Control)</span>
+          <span>{t('Monthly Budgets & Unit Pricing (Cost Control)', 'بودجه ماهانه و نرخ‌های واحد ارائه‌دهندگان (Cost Control)')}</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">سقف بودجه ماهانه کل ($):</label>
+            <label className="block text-slate-300 font-medium mb-1">
+              {t('Total Monthly Budget Cap ($):', 'سقف بودجه ماهانه کل ($):')}
+            </label>
             <input
               type="number"
               step="0.5"
@@ -251,7 +402,9 @@ export const SettingsView: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-slate-300 font-medium mb-1">سقف بودجه Official X ($):</label>
+            <label className="block text-slate-300 font-medium mb-1">
+              {t('Official X Monthly Cap ($):', 'سقف بودجه Official X ($):')}
+            </label>
             <input
               type="number"
               step="0.5"
@@ -261,7 +414,9 @@ export const SettingsView: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-slate-300 font-medium mb-1">سقف بودجه twitterapi.io ($):</label>
+            <label className="block text-slate-300 font-medium mb-1">
+              {t('twitterapi.io Monthly Cap ($):', 'سقف بودجه twitterapi.io ($):')}
+            </label>
             <input
               type="number"
               step="0.5"
@@ -273,10 +428,14 @@ export const SettingsView: React.FC = () => {
         </div>
 
         <div className="pt-2 border-t border-slate-800/80">
-          <div className="text-xs font-bold text-slate-300 mb-2">نرخ‌های محاسباتی هر واحد (قابل ویرایش):</div>
+          <div className="text-xs font-bold text-slate-300 mb-2">
+            {t('Unit Cost Rates (Editable):', 'نرخ‌های محاسباتی هر واحد (قابل ویرایش):')}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <div>
-              <span className="text-slate-400 block mb-1">نرخ هر توییت X Official ($):</span>
+              <span className="text-slate-400 block mb-1">
+                {t('X Official per Tweet Read ($):', 'نرخ هر توییت X Official ($):')}
+              </span>
               <input
                 type="number"
                 step="0.001"
@@ -286,7 +445,9 @@ export const SettingsView: React.FC = () => {
               />
             </div>
             <div>
-              <span className="text-slate-400 block mb-1">نرخ هر توییت twitterapi.io ($):</span>
+              <span className="text-slate-400 block mb-1">
+                {t('twitterapi.io per Tweet ($):', 'نرخ هر توییت twitterapi.io ($):')}
+              </span>
               <input
                 type="number"
                 step="0.00001"
@@ -296,7 +457,9 @@ export const SettingsView: React.FC = () => {
               />
             </div>
             <div>
-              <span className="text-slate-400 block mb-1">نرخ پروفایل کاربر twitterapi.io ($):</span>
+              <span className="text-slate-400 block mb-1">
+                {t('twitterapi.io per User Profile ($):', 'نرخ پروفایل کاربر twitterapi.io ($):')}
+              </span>
               <input
                 type="number"
                 step="0.00001"
@@ -312,10 +475,13 @@ export const SettingsView: React.FC = () => {
       {/* 3. Nitter Instances List */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-3">
         <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
-          <span>لیست سرورهای عمومی Nitter (هر آدرس در یک خط)</span>
+          <span>{t('Public Nitter Instances (One URL per line)', 'لیست سرورهای عمومی Nitter (هر آدرس در یک خط)')}</span>
         </h3>
         <p className="text-xs text-slate-400">
-          سامانه بین این سرورها گردش کرده و سرورهای ناموفق را تا ۱ ساعت نادیده می‌گیرد.
+          {t(
+            'The system rotates across these instances and cools down failing instances for 1 hour.',
+            'سامانه بین این سرورها گردش کرده و سرورهای ناموفق را تا ۱ ساعت نادیده می‌گیرد.'
+          )}
         </p>
         <textarea
           rows={4}
@@ -331,7 +497,12 @@ export const SettingsView: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-cyan-400" />
-            <span>پیکربندی هوش مصنوعی (Google Gemini / OpenAI Compatible / OpenRouter)</span>
+            <span>
+              {t(
+                'AI Configuration (Google Gemini / OpenAI Compatible / OpenRouter)',
+                'پیکربندی هوش مصنوعی (Google Gemini / OpenAI Compatible / OpenRouter)'
+              )}
+            </span>
           </h3>
 
           <div className="flex items-center gap-2">
@@ -342,20 +513,22 @@ export const SettingsView: React.FC = () => {
                 onChange={(e) => handleChange('ai_enrichment_enabled', e.target.checked ? '1' : '0')}
                 className="rounded bg-slate-950 border-slate-800 text-cyan-500"
               />
-              <span>فعال‌سازی ارزیابی هوشمند و ترجمه خودکار</span>
+              <span>{t('Enable Smart AI Enrichment & Translation', 'فعال‌سازی ارزیابی هوشمند و ترجمه خودکار')}</span>
             </label>
           </div>
         </div>
 
         {/* AI Provider Selector */}
         <div>
-          <label className="block text-xs text-slate-300 font-medium mb-2">ارائه‌دهنده سرویس هوش مصنوعی:</label>
+          <label className="block text-xs text-slate-300 font-medium mb-2">
+            {t('AI Service Provider:', 'ارائه‌دهنده سرویس هوش مصنوعی:')}
+          </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               {
                 id: 'gemini',
                 title: 'Google Gemini',
-                subtitle: 'پیش‌فرض AI Studio (Flash / Pro)',
+                subtitle: t('Default SDK (Flash / Pro)', 'پیش‌فرض (Flash / Pro)'),
                 icon: Sparkles,
                 color: 'text-cyan-400',
                 border: 'border-cyan-500/40 bg-cyan-500/5',
@@ -363,7 +536,7 @@ export const SettingsView: React.FC = () => {
               {
                 id: 'openai',
                 title: 'OpenAI Compatible',
-                subtitle: 'OpenAI، Groq، DeepSeek، Ollama، LocalAI',
+                subtitle: 'OpenAI, Groq, DeepSeek, Ollama, LocalAI',
                 icon: Cpu,
                 color: 'text-emerald-400',
                 border: 'border-emerald-500/40 bg-emerald-500/5',
@@ -371,7 +544,7 @@ export const SettingsView: React.FC = () => {
               {
                 id: 'openrouter',
                 title: 'OpenRouter',
-                subtitle: 'دسترسی یکپارچه به Claude، Llama، DeepSeek',
+                subtitle: t('Unified access to Claude, Llama, DeepSeek', 'دسترسی یکپارچه به Claude، Llama، DeepSeek'),
                 icon: Globe,
                 color: 'text-purple-400',
                 border: 'border-purple-500/40 bg-purple-500/5',
@@ -384,7 +557,7 @@ export const SettingsView: React.FC = () => {
                   key={prov.id}
                   type="button"
                   onClick={() => handleChange('ai_provider', prov.id)}
-                  className={`p-3.5 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                  className={`p-3.5 rounded-xl border ${isRtl ? 'text-right' : 'text-left'} transition-all flex flex-col justify-between cursor-pointer ${
                     active
                       ? `${prov.border} ring-1 ring-cyan-500 shadow-lg`
                       : 'border-slate-800 bg-slate-950/70 hover:border-slate-700'
@@ -418,44 +591,54 @@ export const SettingsView: React.FC = () => {
               <div className="flex items-center justify-between text-slate-300 font-bold">
                 <span className="flex items-center gap-1.5 text-cyan-400">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>تنظیمات Google Gemini</span>
+                  <span>{t('Google Gemini Settings', 'تنظیمات Google Gemini')}</span>
                 </span>
                 <span className="text-[11px] text-slate-400 font-normal">
-                  سرویس رسمی Gemini SDK با فرمت ساختاریافته (JSON Schema)
+                  {t('Official Gemini SDK with structured JSON Schema', 'سرویس رسمی Gemini SDK با فرمت ساختاریافته')}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">مدل Gemini:</label>
+                  <label className="block text-slate-400 mb-1">{t('Gemini Model:', 'مدل Gemini:')}</label>
                   <select
                     value={settings['ai_model'] || 'gemini-3.8-flash'}
                     onChange={(e) => handleChange('ai_model', e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
                   >
-                    <option value="gemini-3.8-flash">gemini-3.8-flash (جدیدترین نسخه - سریع و بهینه)</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (نسخه اقتصادی)</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro (استدلال تحلیلی عمیق)</option>
-                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                    <option value="gemini-3.8-flash">
+                      {t('gemini-3.8-flash (Latest - Fast & Optimal)', 'gemini-3.8-flash (جدیدترین نسخه - سریع و بهینه)')}
+                    </option>
+                    <option value="gemini-3.1-flash-lite">
+                      {t('gemini-3.1-flash-lite (Ultra Fast & Economical)', 'gemini-3.1-flash-lite (نسخه فوق سریع و اقتصادی)')}
+                    </option>
+                    <option value="gemini-flash-latest">
+                      {t('gemini-flash-latest (Stable Flash)', 'gemini-flash-latest (آخرین نسخه پایدار Flash)')}
+                    </option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-slate-400 mb-1">
-                    کلید اختصاصی Gemini API (اختیاری):
+                    {t('Custom Gemini API Key (Optional):', 'کلید اختصاصی Gemini API (اختیاری):')}
                   </label>
                   <div className="relative">
                     <input
                       type={showApiKey ? 'text' : 'password'}
                       value={settings['ai_gemini_api_key'] || ''}
                       onChange={(e) => handleChange('ai_gemini_api_key', e.target.value)}
-                      placeholder="در صورت خالی بودن از کلید محیط GEMINI_API_KEY استفاده می‌شود"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] pl-9"
+                      placeholder={t(
+                        'Uses environment GEMINI_API_KEY if left blank',
+                        'در صورت خالی بودن از کلید محیط GEMINI_API_KEY استفاده می‌شود'
+                      )}
+                      className={`w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] ${
+                        isRtl ? 'pl-9' : 'pr-9'
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute left-2.5 top-2.5 text-slate-500 hover:text-slate-300"
+                      className={`absolute ${isRtl ? 'left-2.5' : 'right-2.5'} top-2.5 text-slate-500 hover:text-slate-300 cursor-pointer`}
                     >
                       {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -471,16 +654,18 @@ export const SettingsView: React.FC = () => {
               <div className="flex items-center justify-between text-slate-300 font-bold">
                 <span className="flex items-center gap-1.5 text-emerald-400">
                   <Cpu className="w-3.5 h-3.5" />
-                  <span>تنظیمات ارائه‌دهنده سازگار با OpenAI (OpenAI Compatible)</span>
+                  <span>{t('OpenAI Compatible Provider Settings', 'تنظیمات ارائه‌دهنده سازگار با OpenAI')}</span>
                 </span>
                 <span className="text-[11px] text-slate-400 font-normal">
-                  پشتیبانی از هر سرور با استاندارد REST /chat/completions
+                  {t('Supports any REST /chat/completions server', 'پشتیبانی از هر سرور با استاندارد REST /chat/completions')}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">آدرس پایه سرور (Base URL):</label>
+                  <label className="block text-slate-400 mb-1">
+                    {t('Server Base URL:', 'آدرس پایه سرور (Base URL):')}
+                  </label>
                   <input
                     type="text"
                     value={settings['ai_openai_base_url'] || 'https://api.openai.com/v1'}
@@ -489,14 +674,14 @@ export const SettingsView: React.FC = () => {
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px]"
                   />
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[10px] text-slate-500">پیش‌فرض‌ها:</span>
+                    <span className="text-[10px] text-slate-500">{t('Presets:', 'پیش‌فرض‌ها:')}</span>
                     <button
                       type="button"
                       onClick={() => {
                         handleChange('ai_openai_base_url', 'https://api.openai.com/v1');
                         handleChange('ai_openai_model', 'gpt-4o-mini');
                       }}
-                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono cursor-pointer"
                     >
                       OpenAI
                     </button>
@@ -506,7 +691,7 @@ export const SettingsView: React.FC = () => {
                         handleChange('ai_openai_base_url', 'https://api.groq.com/openai/v1');
                         handleChange('ai_openai_model', 'llama-3.3-70b-versatile');
                       }}
-                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono cursor-pointer"
                     >
                       Groq
                     </button>
@@ -516,7 +701,7 @@ export const SettingsView: React.FC = () => {
                         handleChange('ai_openai_base_url', 'https://api.deepseek.com/v1');
                         handleChange('ai_openai_model', 'deepseek-chat');
                       }}
-                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono cursor-pointer"
                     >
                       DeepSeek
                     </button>
@@ -526,15 +711,15 @@ export const SettingsView: React.FC = () => {
                         handleChange('ai_openai_base_url', 'http://localhost:11434/v1');
                         handleChange('ai_openai_model', 'llama3');
                       }}
-                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 font-mono cursor-pointer"
                     >
-                      Ollama (محلی)
+                      {t('Ollama (Local)', 'Ollama (محلی)')}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">نام مدل (Model Name):</label>
+                  <label className="block text-slate-400 mb-1">{t('Model Name:', 'نام مدل (Model Name):')}</label>
                   <input
                     type="text"
                     value={settings['ai_openai_model'] || 'gpt-4o-mini'}
@@ -543,13 +728,13 @@ export const SettingsView: React.FC = () => {
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px]"
                   />
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[10px] text-slate-500">مدل‌ها:</span>
+                    <span className="text-[10px] text-slate-500">{t('Models:', 'مدل‌ها:')}</span>
                     {['gpt-4o-mini', 'gpt-4o', 'deepseek-chat', 'llama-3.3-70b-versatile'].map((m) => (
                       <button
                         key={m}
                         type="button"
                         onClick={() => handleChange('ai_openai_model', m)}
-                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-mono"
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-mono cursor-pointer"
                       >
                         {m}
                       </button>
@@ -559,19 +744,21 @@ export const SettingsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">کلید API (Bearer Token):</label>
+                <label className="block text-slate-400 mb-1">{t('API Key (Bearer Token):', 'کلید API (Bearer Token):')}</label>
                 <div className="relative">
                   <input
                     type={showApiKey ? 'text' : 'password'}
                     value={settings['ai_openai_api_key'] || ''}
                     onChange={(e) => handleChange('ai_openai_api_key', e.target.value)}
                     placeholder="sk-..."
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] pl-9"
+                    className={`w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] ${
+                      isRtl ? 'pl-9' : 'pr-9'
+                    }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute left-2.5 top-2.5 text-slate-500 hover:text-slate-300"
+                    className={`absolute ${isRtl ? 'left-2.5' : 'right-2.5'} top-2.5 text-slate-500 hover:text-slate-300 cursor-pointer`}
                   >
                     {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -586,7 +773,7 @@ export const SettingsView: React.FC = () => {
               <div className="flex items-center justify-between text-slate-300 font-bold">
                 <span className="flex items-center gap-1.5 text-purple-400">
                   <Globe className="w-3.5 h-3.5" />
-                  <span>تنظیمات سرویس OpenRouter</span>
+                  <span>{t('OpenRouter Service Settings', 'تنظیمات سرویس OpenRouter')}</span>
                 </span>
                 <a
                   href="https://openrouter.ai/keys"
@@ -594,26 +781,30 @@ export const SettingsView: React.FC = () => {
                   rel="noopener noreferrer"
                   className="text-[11px] text-purple-400 hover:underline flex items-center gap-1 font-medium"
                 >
-                  <span>دریافت کلید از openrouter.ai</span>
+                  <span>{t('Get API Key from openrouter.ai', 'دریافت کلید از openrouter.ai')}</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">کلید OpenRouter API Key:</label>
+                  <label className="block text-slate-400 mb-1">
+                    {t('OpenRouter API Key:', 'کلید OpenRouter API Key:')}
+                  </label>
                   <div className="relative">
                     <input
                       type={showApiKey ? 'text' : 'password'}
                       value={settings['ai_openrouter_api_key'] || ''}
                       onChange={(e) => handleChange('ai_openrouter_api_key', e.target.value)}
                       placeholder="sk-or-v1-..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] pl-9"
+                      className={`w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px] ${
+                        isRtl ? 'pl-9' : 'pr-9'
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute left-2.5 top-2.5 text-slate-500 hover:text-slate-300"
+                      className={`absolute ${isRtl ? 'left-2.5' : 'right-2.5'} top-2.5 text-slate-500 hover:text-slate-300 cursor-pointer`}
                     >
                       {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -621,7 +812,7 @@ export const SettingsView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">شناسه مدل (Model ID):</label>
+                  <label className="block text-slate-400 mb-1">{t('Model ID:', 'شناسه مدل (Model ID):')}</label>
                   <input
                     type="text"
                     value={settings['ai_openrouter_model'] || 'openai/gpt-4o-mini'}
@@ -630,7 +821,7 @@ export const SettingsView: React.FC = () => {
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px]"
                   />
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[10px] text-slate-500">محبوب‌ترین‌ها:</span>
+                    <span className="text-[10px] text-slate-500">{t('Popular:', 'محبوب‌ترین‌ها:')}</span>
                     {[
                       'openai/gpt-4o-mini',
                       'anthropic/claude-3.5-sonnet',
@@ -641,7 +832,7 @@ export const SettingsView: React.FC = () => {
                         key={m}
                         type="button"
                         onClick={() => handleChange('ai_openrouter_model', m)}
-                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-purple-300 font-mono"
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-purple-300 font-mono cursor-pointer"
                       >
                         {m.split('/')[1]}
                       </button>
@@ -655,16 +846,21 @@ export const SettingsView: React.FC = () => {
           {/* Test Connection Action Bar */}
           <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
             <div className="text-[11px] text-slate-400">
-              می‌توانید پیش از ذخیره، عملکرد و صحت اتصال مدل انتخابی را تست کنید:
+              {t(
+                'Test connectivity and response of your selected AI model before saving:',
+                'می‌توانید پیش از ذخیره، عملکرد و صحت اتصال مدل انتخابی را تست کنید:'
+              )}
             </div>
             <button
               type="button"
               onClick={handleTestAi}
               disabled={aiTesting}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 border border-cyan-500/20"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 border border-cyan-500/20 cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${aiTesting ? 'animate-spin' : ''}`} />
-              <span>{aiTesting ? 'در حال آزمون ارتباط...' : 'تست اتصال هوش مصنوعی'}</span>
+              <span>
+                {aiTesting ? t('Testing AI Connection...', 'در حال آزمون ارتباط...') : t('Test AI Connection', 'تست اتصال هوش مصنوعی')}
+              </span>
             </button>
           </div>
 
@@ -690,7 +886,9 @@ export const SettingsView: React.FC = () => {
         {/* Batch & Digest Schedule Controls */}
         <div className="pt-2 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1">اندازه بسته ارزیابی (Batch Size):</label>
+            <label className="block text-slate-300 font-medium mb-1">
+              {t('Enrichment Batch Size:', 'اندازه بسته ارزیابی (Batch Size):')}
+            </label>
             <input
               type="number"
               min="1"
@@ -702,20 +900,24 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">زمان‌بندی تولید دایجست:</label>
+            <label className="block text-slate-300 font-medium mb-1">
+              {t('Digest Generation Schedule:', 'زمان‌بندی تولید دایجست:')}
+            </label>
             <select
               value={settings['digest_schedule_type'] || 'daily'}
               onChange={(e) => handleChange('digest_schedule_type', e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
             >
-              <option value="daily">روزانه (یک بار در ساعت مشخص)</option>
-              <option value="hourly">ساعتی</option>
-              <option value="off">غیرفعال (فقط دستی)</option>
+              <option value="daily">{t('Daily (At specified time)', 'روزانه (یک بار در ساعت مشخص)')}</option>
+              <option value="hourly">{t('Hourly', 'ساعتی')}</option>
+              <option value="off">{t('Disabled (Manual only)', 'غیرفعال (فقط دستی)')}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">ساعت ارسال دایجست روزانه:</label>
+            <label className="block text-slate-300 font-medium mb-1">
+              {t('Daily Digest Time:', 'ساعت ارسال دایجست روزانه:')}
+            </label>
             <input
               type="time"
               value={settings['digest_daily_time'] || '20:00'}
@@ -730,12 +932,12 @@ export const SettingsView: React.FC = () => {
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
         <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
           <Database className="w-4 h-4 text-cyan-400" />
-          <span>نگه‌داری داده‌ها و پشتیبان‌گیری دیتابیس</span>
+          <span>{t('Data Retention & Database Backup', 'نگه‌داری داده‌ها و پشتیبان‌گیری دیتابیس')}</span>
         </h3>
 
         <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
           <div className="flex items-center gap-3">
-            <span className="text-slate-300">نگه‌داری پست‌ها تا (روز):</span>
+            <span className="text-slate-300">{t('Retain posts for (days):', 'نگه‌داری پست‌ها تا (روز):')}</span>
             <input
               type="number"
               value={settings['retention_days'] || '30'}
@@ -744,10 +946,10 @@ export const SettingsView: React.FC = () => {
             />
             <button
               onClick={handleRetentionCleanup}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>پاکسازی دستی اکنون</span>
+              <span>{t('Clean Up Now', 'پاکسازی دستی اکنون')}</span>
             </button>
           </div>
 
@@ -757,10 +959,11 @@ export const SettingsView: React.FC = () => {
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 flex items-center gap-2 font-medium"
           >
             <Download className="w-4 h-4" />
-            <span>دانلود فایل پشتیبان SQLite</span>
+            <span>{t('Download SQLite Backup', 'دانلود فایل پشتیبان SQLite')}</span>
           </a>
         </div>
       </div>
     </div>
   );
 };
+

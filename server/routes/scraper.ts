@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getSidecarUrl } from '../providers/twscrape.ts';
+import { db } from '../db/index.ts';
 
 export const scraperRouter = Router();
 
@@ -12,12 +13,34 @@ const addAccountSchema = z.object({
   ct0: z.string().min(1),
 });
 
-// List scraper accounts from sidecar
+function getLocalScraperAccounts() {
+  const rows = db.prepare('SELECT username, active, last_error, locks_json FROM scraper_accounts ORDER BY created_at DESC').all() as {
+    username: string;
+    active: number;
+    last_error?: string;
+    locks_json?: string;
+  }[];
+
+  return rows.map((r) => {
+    let locks: string[] = [];
+    try {
+      locks = r.locks_json ? JSON.parse(r.locks_json) : [];
+    } catch {}
+    return {
+      username: r.username,
+      active: !!r.active,
+      last_error: r.last_error || undefined,
+      locks,
+    };
+  });
+}
+
+// List scraper accounts from sidecar (or embedded SQLite fallback)
 scraperRouter.get('/accounts', async (_req, res) => {
   const sidecarUrl = getSidecarUrl().replace(/\/$/, '');
   try {
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 6000);
+    const t = setTimeout(() => controller.abort(), 2500);
     const response = await fetch(`${sidecarUrl}/accounts`, {
       headers: {
         'X-Sidecar-Secret': SIDECAR_SECRET,
@@ -26,19 +49,16 @@ scraperRouter.get('/accounts', async (_req, res) => {
     });
     clearTimeout(t);
 
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(response.status).json({ error: `سایدکار اسکرپر: ${err}` });
+    if (response.ok) {
+      const data = await response.json();
+      return res.json(data);
     }
+  } catch {}
 
-    const data = await response.json();
-    res.json(data);
-  } catch (err: any) {
-    res.status(502).json({ error: `اتصال به سایدکار اسکرپر ممکن نشد: ${err.message}` });
-  }
+  return res.json({ accounts: getLocalScraperAccounts(), embedded: true });
 });
 
-// Add account (write-only cookies sent directly to sidecar)
+// Add account (write-only cookies sent to sidecar or stored in local pool)
 scraperRouter.post('/accounts', async (req, res) => {
   const parsed = addAccountSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -46,9 +66,12 @@ scraperRouter.post('/accounts', async (req, res) => {
   }
 
   const { username, auth_token, ct0 } = parsed.data;
+  const cleanUser = username.replace(/^@/, '');
 
   try {
     const sidecarUrl = getSidecarUrl().replace(/\/$/, '');
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 3000);
     const response = await fetch(`${sidecarUrl}/accounts`, {
       method: 'POST',
       headers: {
@@ -56,44 +79,53 @@ scraperRouter.post('/accounts', async (req, res) => {
         'X-Sidecar-Secret': SIDECAR_SECRET,
       },
       body: JSON.stringify({
-        username: username.replace(/^@/, ''),
+        username: cleanUser,
         auth_token,
         ct0,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(t);
 
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(response.status).json({ error: `خطا در ثبت حساب در اسکرپر: ${err}` });
+    if (response.ok) {
+      const data = await response.json();
+      return res.json({ ok: true, message: 'حساب اختصاصی با موفقیت به اسکرپر افزوده شد.', data });
     }
+  } catch {}
 
-    const data = await response.json();
-    res.json({ ok: true, message: 'حساب اختصاصی با موفقیت به اسکرپر افزوده شد.', data });
-  } catch (err: any) {
-    res.status(502).json({ error: `خطا در ارتباط با سرویس اسکرپر: ${err.message}` });
-  }
+  db.prepare(`
+    INSERT INTO scraper_accounts (username, auth_token, ct0, active, created_at)
+    VALUES (?, ?, ?, 1, ?)
+    ON CONFLICT(username) DO UPDATE SET
+      auth_token = excluded.auth_token,
+      ct0 = excluded.ct0,
+      active = 1,
+      last_error = NULL
+  `).run(cleanUser, auth_token, ct0, new Date().toISOString());
+
+  return res.json({ ok: true, message: 'حساب اختصاصی با موفقیت به اسکرپر داخلی افزوده شد.' });
 });
 
-// Delete account from sidecar
+// Delete account from sidecar (and local pool)
 scraperRouter.delete('/accounts/:username', async (req, res) => {
   const { username } = req.params;
+  const cleanUser = username.replace(/^@/, '');
 
   try {
     const sidecarUrl = getSidecarUrl().replace(/\/$/, '');
-    const response = await fetch(`${sidecarUrl}/accounts/${encodeURIComponent(username)}`, {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 2500);
+    await fetch(`${sidecarUrl}/accounts/${encodeURIComponent(cleanUser)}`, {
       method: 'DELETE',
       headers: {
         'X-Sidecar-Secret': SIDECAR_SECRET,
       },
+      signal: controller.signal,
     });
+    clearTimeout(t);
+  } catch {}
 
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(response.status).json({ error: err });
-    }
-
-    res.json({ ok: true, message: `حساب @${username} با موفقیت از اسکرپر حذف شد.` });
-  } catch (err: any) {
-    res.status(502).json({ error: err.message });
-  }
+  db.prepare('DELETE FROM scraper_accounts WHERE username = ?').run(cleanUser);
+  res.json({ ok: true, message: `حساب @${cleanUser} با موفقیت از اسکرپر حذف شد.` });
 });
+

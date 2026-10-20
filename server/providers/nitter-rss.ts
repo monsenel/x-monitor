@@ -134,61 +134,192 @@ export class NitterRssProvider implements DataProvider {
     };
   }
 
-  async fetchNew(source: SourceEntity, state: Record<string, unknown>): Promise<FetchResult> {
-    const instance = this.pickHealthyInstance();
-    if (!instance) {
-      throw new Error('هیچ سرور Nitter فعالی در تنظیمات پیکربندی نشده یا همه سرورها موقتاً از دسترس خارج هستند.');
-    }
-
-    const lastSeenIds = new Set<string>((state.last_seen_ids as string[]) || []);
-    let url = '';
-
-    if (source.type === 'account') {
-      const cleanUsername = source.value.replace(/^@/, '');
-      url = `${instance}/${encodeURIComponent(cleanUsername)}/rss`;
-    } else {
-      let q = source.value;
-      if (source.type === 'hashtag') {
-        q = source.value.startsWith('#') ? source.value : `#${source.value}`;
-      }
-      if (source.exclude_retweets) q += ' -filter:retweets';
-      if (source.exclude_replies) q += ' -filter:replies';
-      if (source.lang) q += ` lang:${source.lang}`;
-      url = `${instance}/search/rss?f=tweets&q=${encodeURIComponent(q)}`;
-    }
-
+  private async fetchSyndicationTimeline(
+    username: string,
+    lastSeenIds: Set<string>,
+    maxResults: number
+  ): Promise<{ posts: NormalizedPost[]; newSeenIds: string[] } | null> {
+    const cleanUsername = username.replace(/^@/, '');
+    const url = `https://syndication.twitter.com/srv/timeline-profile/screen-name/${encodeURIComponent(cleanUsername)}`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 7000);
 
-    let xmlText = '';
     try {
       const res = await fetch(url, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-          Accept: 'application/rss+xml, application/xml, text/xml',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
         signal: controller.signal,
       });
 
-      if (!res.ok) {
-        this.recordFailure(instance);
-        throw new Error(`Nitter instance ${instance} HTTP ${res.status}`);
+      if (!res.ok) return null;
+      const html = await res.text();
+      const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+      if (!match?.[1]) return null;
+
+      const data = JSON.parse(match[1]);
+      const entries = data?.props?.pageProps?.timeline?.entries;
+      if (!Array.isArray(entries)) return null;
+
+      const posts: NormalizedPost[] = [];
+      const newSeenIds: string[] = [];
+
+      for (const entry of entries) {
+        const tweet = entry?.content?.tweet;
+        if (!tweet) continue;
+        const postId = String(tweet.id_str || tweet.id || '');
+        if (!postId) continue;
+
+        if (lastSeenIds.has(postId)) {
+          continue;
+        }
+
+        newSeenIds.push(postId);
+        const user = tweet.user || {};
+        const authorUsername = user.screen_name || cleanUsername;
+        const mediaList: { type: 'photo'; url: string; previewUrl?: string }[] = [];
+        const rawMedia = tweet.entities?.media || tweet.extended_entities?.media || [];
+        if (Array.isArray(rawMedia)) {
+          for (const m of rawMedia) {
+            if (m?.media_url_https) {
+              mediaList.push({
+                type: 'photo',
+                url: m.media_url_https,
+                previewUrl: m.media_url_https,
+              });
+            }
+          }
+        }
+
+        posts.push({
+          id: postId,
+          authorId: user.id_str ? String(user.id_str) : undefined,
+          authorUsername,
+          authorName: user.name || authorUsername,
+          authorAvatar: user.profile_image_url_https || undefined,
+          text: tweet.full_text || tweet.text || '',
+          lang: tweet.lang || undefined,
+          createdAt: tweet.created_at ? new Date(tweet.created_at).toISOString() : new Date().toISOString(),
+          metrics: {
+            likes: Number(tweet.favorite_count || 0),
+            retweets: Number(tweet.retweet_count || 0),
+            replies: Number(tweet.reply_count || 0),
+            quotes: Number(tweet.quote_count || 0),
+          },
+          media: mediaList,
+          url: `https://x.com/${authorUsername}/status/${postId}`,
+          isReply: !!tweet.in_reply_to_status_id_str,
+          isRetweet: !!tweet.retweeted_status,
+          isQuote: !!tweet.is_quote_status,
+        });
+
+        if (posts.length >= maxResults) break;
       }
 
-      xmlText = await res.text();
-      this.recordSuccess(instance);
-    } catch (err: any) {
-      this.recordFailure(instance);
-      throw err;
+      return { posts, newSeenIds };
+    } catch {
+      return null;
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  async fetchNew(source: SourceEntity, state: Record<string, unknown>): Promise<FetchResult> {
+    const lastSeenIds = new Set<string>((state.last_seen_ids as string[]) || []);
+    const maxResults = source.max_results || 20;
+
+    // For account sources, try X Syndication first as a fast, reliable, zero-key feed
+    if (source.type === 'account') {
+      const syndication = await this.fetchSyndicationTimeline(source.value, lastSeenIds, maxResults);
+      if (syndication && syndication.posts.length > 0) {
+        const mergedSeen = Array.from(new Set([...syndication.newSeenIds, ...Array.from(lastSeenIds)])).slice(0, 100);
+        return {
+          posts: syndication.posts,
+          users: [],
+          newState: {
+            ...state,
+            last_seen_ids: mergedSeen,
+            last_polled_at: new Date().toISOString(),
+          },
+          usage: {
+            postsRead: syndication.posts.length,
+            usersRead: 0,
+            calls: 1,
+            endpoint: 'syndication-rss',
+          },
+        };
+      }
+    }
+
+    const instances = this.getInstances();
+    let xmlText = '';
+
+    // Try up to 3 instances
+    const maxAttempts = Math.min(Math.max(instances.length, 1), 3);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const instance = this.pickHealthyInstance();
+      if (!instance) break;
+
+      let url = '';
+      if (source.type === 'account') {
+        const cleanUsername = source.value.replace(/^@/, '');
+        url = `${instance}/${encodeURIComponent(cleanUsername)}/rss`;
+      } else {
+        let q = source.value;
+        if (source.type === 'hashtag') {
+          q = source.value.startsWith('#') ? source.value : `#${source.value}`;
+        }
+        if (source.exclude_retweets) q += ' -filter:retweets';
+        if (source.exclude_replies) q += ' -filter:replies';
+        if (source.lang) q += ` lang:${source.lang}`;
+        url = `${instance}/search/rss?f=tweets&q=${encodeURIComponent(q)}`;
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            Accept: 'application/rss+xml, application/xml, text/xml',
+          },
+          signal: controller.signal,
+        });
+
+        if (res.ok) {
+          xmlText = await res.text();
+          this.recordSuccess(instance);
+          break;
+        } else {
+          this.recordFailure(instance);
+        }
+      } catch {
+        this.recordFailure(instance);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    if (!xmlText) {
+      return {
+        posts: [],
+        users: [],
+        newState: {
+          ...state,
+          last_polled_at: new Date().toISOString(),
+        },
+        usage: { postsRead: 0, usersRead: 0, calls: 1, endpoint: 'rss' },
+      };
     }
 
     const parsed = this.xmlParser.parse(xmlText);
     const channel = parsed?.rss?.channel;
     if (!channel) {
-      return { posts: [], users: [], newState: state, usage: { postsRead: 0, usersRead: 0, calls: 1, endpoint: url } };
+      return { posts: [], users: [], newState: state, usage: { postsRead: 0, usersRead: 0, calls: 1, endpoint: 'rss' } };
     }
 
     const rawItems = Array.isArray(channel.item) ? channel.item : channel.item ? [channel.item] : [];
@@ -236,7 +367,7 @@ export class NitterRssProvider implements DataProvider {
         isQuote: false,
       });
 
-      if (posts.length >= (source.max_results || 20)) {
+      if (posts.length >= maxResults) {
         break;
       }
     }
@@ -275,7 +406,7 @@ export class NitterRssProvider implements DataProvider {
       instances.map(async (inst) => {
         try {
           const c = new AbortController();
-          const t = setTimeout(() => c.abort(), 6000);
+          const t = setTimeout(() => c.abort(), 5000);
           const res = await fetch(`${inst}/about`, { signal: c.signal });
           clearTimeout(t);
           return { url: inst, ok: res.status < 500 };
@@ -286,9 +417,32 @@ export class NitterRssProvider implements DataProvider {
     );
 
     const activeCount = results.filter((r) => r.ok).length;
+    if (activeCount > 0) {
+      return {
+        ok: true,
+        message: `${activeCount} از ${instances.length} سرور Nitter پاسخگو هستند.`,
+        details: { instances: results },
+      };
+    }
+
+    // Check if X Syndication fallback is reachable
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 5000);
+      const synRes = await fetch('https://syndication.twitter.com/srv/timeline-profile/screen-name/x', { signal: c.signal });
+      clearTimeout(t);
+      if (synRes.status < 500) {
+        return {
+          ok: true,
+          message: 'فید جایگزین X Syndication فعال و آماده دریافت تایم‌لاین حساب‌ها است.',
+          details: { instances: results, syndicationFallback: true },
+        };
+      }
+    } catch {}
+
     return {
-      ok: activeCount > 0,
-      message: `${activeCount} از ${instances.length} سرور Nitter پاسخگو هستند.`,
+      ok: false,
+      message: `0 از ${instances.length} سرور Nitter پاسخگو هستند.`,
       details: { instances: results },
     };
   }

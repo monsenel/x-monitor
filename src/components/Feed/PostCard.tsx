@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Post } from '../../types.ts';
 import { toRelativeTimeFa, toJalaliDate, toGregorianDate, formatNumberFa, toPersianDigits } from '../../utils/date.ts';
+import { usePreferences } from '../../context/PreferencesContext.tsx';
 import {
   Heart,
   Repeat,
@@ -30,8 +31,8 @@ export const PostCard: React.FC<PostCardProps> = ({
   onToggleRead,
   onToggleBookmark,
   onHide,
-  onRetryEnrichment,
 }) => {
+  const { t, isRtl } = usePreferences();
   const [showOriginal, setShowOriginal] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -51,10 +52,12 @@ export const PostCard: React.FC<PostCardProps> = ({
     return (
       <div
         className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-xs font-bold ${color}`}
-        title={post.importanceReason || 'امتیاز اهمیت بر اساس ارزیابی هوش مصنوعی'}
+        title={post.importanceReason || t('AI-assessed importance score', 'امتیاز اهمیت بر اساس ارزیابی هوش مصنوعی')}
       >
         <Sparkles className="w-3 h-3" />
-        <span>اهمیت: {toPersianDigits(score)}/۱۰</span>
+        <span>
+          {t('Importance:', 'اهمیت:')} {toPersianDigits(score)}/{toPersianDigits(10)}
+        </span>
       </div>
     );
   };
@@ -62,21 +65,49 @@ export const PostCard: React.FC<PostCardProps> = ({
   const getSentimentBadge = (sentiment?: string) => {
     if (!sentiment) return null;
     if (sentiment === 'positive') {
-      return <span className="px-2 py-0.5 rounded text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">مثبت</span>;
+      return (
+        <span className="px-2 py-0.5 rounded text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          {t('Positive', 'مثبت')}
+        </span>
+      );
     }
     if (sentiment === 'negative') {
-      return <span className="px-2 py-0.5 rounded text-[11px] bg-rose-500/10 text-rose-400 border border-rose-500/20">منفی</span>;
+      return (
+        <span className="px-2 py-0.5 rounded text-[11px] bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          {t('Negative', 'منفی')}
+        </span>
+      );
     }
-    return <span className="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-400 border border-slate-700">خنثی</span>;
+    return (
+      <span className="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-400 border border-slate-700">
+        {t('Neutral', 'خنثی')}
+      </span>
+    );
   };
 
   const hasTranslation = Boolean(post.translationFa);
+  // In English mode, show original text by default (unless toggled to translation). In Persian mode, show Persian translation by default.
+  const displayPrimaryText = isRtl
+    ? hasTranslation && !showOriginal
+      ? post.translationFa
+      : post.text
+    : hasTranslation && showOriginal
+    ? post.translationFa
+    : post.text;
 
   return (
     <article
       className={`rounded-2xl border transition-all duration-200 p-4 sm:p-5 relative ${
-        isSelected ? 'ring-2 ring-cyan-500 border-cyan-500/50 bg-slate-900/90' : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
-      } ${post.isRead ? 'opacity-85' : 'border-r-4 border-r-cyan-500'}`}
+        isSelected
+          ? 'ring-2 ring-cyan-500 border-cyan-500/50 bg-slate-900/90'
+          : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
+      } ${
+        post.isRead
+          ? 'opacity-85'
+          : isRtl
+          ? 'border-r-4 border-r-cyan-500'
+          : 'border-l-4 border-l-cyan-500'
+      }`}
     >
       {/* Header: Author & Source Chips */}
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -105,11 +136,9 @@ export const PostCard: React.FC<PostCardProps> = ({
               </span>
             </div>
             <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
-              <span title={`تقویم میلادی: ${toGregorianDate(post.createdAt)}`}>
-                {toRelativeTimeFa(post.createdAt)}
-              </span>
+              <span title={toGregorianDate(post.createdAt)}>{toRelativeTimeFa(post.createdAt)}</span>
               <span>•</span>
-              <span className="text-[11px] text-slate-500" title={`تقویم میلادی: ${toGregorianDate(post.createdAt)}`}>
+              <span className="text-[11px] text-slate-500" title={toGregorianDate(post.createdAt)}>
                 {toJalaliDate(post.createdAt)}
               </span>
             </div>
@@ -143,7 +172,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
       {/* Importance reason summary */}
       {post.importanceReason && (
-        <div className="mb-3 px-3 py-1.5 rounded-xl bg-cyan-950/20 border border-cyan-800/30 text-xs text-cyan-300 flex items-start gap-2">
+        <div className="mb-3 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-xs text-cyan-300 flex items-start gap-2">
           <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-cyan-400" />
           <span>{post.importanceReason}</span>
         </div>
@@ -151,7 +180,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
       {/* Text Content */}
       <div className="mb-3 text-slate-200 text-sm leading-relaxed whitespace-pre-line select-text" dir="auto">
-        {hasTranslation && !showOriginal ? post.translationFa : post.text}
+        {displayPrimaryText}
       </div>
 
       {/* Translation toggle button if post has translation */}
@@ -161,7 +190,15 @@ export const PostCard: React.FC<PostCardProps> = ({
           className="mb-3 text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
         >
           <Languages className="w-3.5 h-3.5" />
-          <span>{showOriginal ? 'مشاهده ترجمه فارسی هوشمند' : 'مشاهده متن اصلی'}</span>
+          <span>
+            {isRtl
+              ? showOriginal
+                ? 'مشاهده ترجمه فارسی هوشمند'
+                : 'مشاهده متن اصلی'
+              : showOriginal
+              ? 'Show Original Post'
+              : 'Show Persian AI Translation'}
+          </span>
         </button>
       )}
 
@@ -183,20 +220,20 @@ export const PostCard: React.FC<PostCardProps> = ({
 
       {/* Metrics Bar */}
       <div className="flex items-center gap-4 sm:gap-6 pt-2 pb-3 text-xs text-slate-400 border-t border-slate-800/80">
-        <span className="flex items-center gap-1.5" title="پسندها (Likes)">
+        <span className="flex items-center gap-1.5" title={t('Likes', 'پسندها (Likes)')}>
           <Heart className="w-3.5 h-3.5 text-rose-400/80" />
           <span className="font-mono">{formatNumberFa(post.metrics.likes || 0)}</span>
         </span>
-        <span className="flex items-center gap-1.5" title="بازتوییت‌ها (Retweets)">
+        <span className="flex items-center gap-1.5" title={t('Retweets', 'بازتوییت‌ها (Retweets)')}>
           <Repeat className="w-3.5 h-3.5 text-emerald-400/80" />
           <span className="font-mono">{formatNumberFa(post.metrics.retweets || 0)}</span>
         </span>
-        <span className="flex items-center gap-1.5" title="پاسخ‌ها (Replies)">
+        <span className="flex items-center gap-1.5" title={t('Replies', 'پاسخ‌ها (Replies)')}>
           <MessageCircle className="w-3.5 h-3.5 text-sky-400/80" />
           <span className="font-mono">{formatNumberFa(post.metrics.replies || 0)}</span>
         </span>
         {post.metrics.views !== undefined && (
-          <span className="flex items-center gap-1.5" title="بازدیدها (Views)">
+          <span className="flex items-center gap-1.5" title={t('Views', 'بازدیدها (Views)')}>
             <Eye className="w-3.5 h-3.5 text-slate-500" />
             <span className="font-mono">{formatNumberFa(post.metrics.views)}</span>
           </span>
@@ -213,10 +250,10 @@ export const PostCard: React.FC<PostCardProps> = ({
                 ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 : 'text-cyan-400 hover:bg-cyan-500/10 font-medium'
             }`}
-            title="علامت‌گذاری به عنوان خوانده‌شده/نشده (کلید m)"
+            title={t('Toggle Read/Unread (Key: m)', 'علامت‌گذاری به عنوان خوانده‌شده/نشده (کلید m)')}
           >
             <CheckCircle className="w-3.5 h-3.5" />
-            <span>{post.isRead ? 'خوانده‌شده' : 'جدید'}</span>
+            <span>{post.isRead ? t('Read', 'خوانده‌شده') : t('Unread', 'جدید')}</span>
           </button>
 
           <button
@@ -224,16 +261,16 @@ export const PostCard: React.FC<PostCardProps> = ({
             className={`p-1.5 rounded-lg flex items-center gap-1 transition-colors ${
               post.isBookmarked ? 'text-amber-400 bg-amber-500/10' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
             }`}
-            title="نشان‌کردن پست (کلید b)"
+            title={t('Bookmark Post (Key: b)', 'نشان‌کردن پست (کلید b)')}
           >
             <Bookmark className="w-3.5 h-3.5" />
-            <span>{post.isBookmarked ? 'نشان‌شده' : 'نشان'}</span>
+            <span>{post.isBookmarked ? t('Saved', 'نشان‌شده') : t('Save', 'نشان')}</span>
           </button>
 
           <button
             onClick={() => onHide(post.id)}
             className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-            title="مخفی کردن پست"
+            title={t('Hide Post', 'مخفی کردن پست')}
           >
             <EyeOff className="w-3.5 h-3.5" />
           </button>
@@ -243,10 +280,10 @@ export const PostCard: React.FC<PostCardProps> = ({
           <button
             onClick={handleCopyLink}
             className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1"
-            title="کپی پیوند"
+            title={t('Copy Link', 'کپی پیوند')}
           >
             <Share2 className="w-3.5 h-3.5" />
-            <span>{copied ? 'کپی شد!' : 'کپی'}</span>
+            <span>{copied ? t('Copied!', 'کپی شد!') : t('Copy', 'کپی')}</span>
           </button>
 
           <a
@@ -254,9 +291,9 @@ export const PostCard: React.FC<PostCardProps> = ({
             target="_blank"
             rel="noopener noreferrer"
             className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1 font-medium transition-colors"
-            title="مشاهده مستقیم در X (کلید o)"
+            title={t('Open on X (Key: o)', 'مشاهده مستقیم در X (کلید o)')}
           >
-            <span>نمایش در X</span>
+            <span>{t('Open on X', 'نمایش در X')}</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>
@@ -264,3 +301,4 @@ export const PostCard: React.FC<PostCardProps> = ({
     </article>
   );
 };
+

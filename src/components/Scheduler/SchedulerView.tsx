@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../../utils/api.ts';
 import { toRelativeTimeFa, toJalaliDate, toPersianDigits } from '../../utils/date.ts';
 import { useRealtime } from '../../context/RealtimeContext.tsx';
-import { Clock, AlertTriangle, ShieldCheck, Play, Pause, RefreshCw } from 'lucide-react';
+import { usePreferences } from '../../context/PreferencesContext.tsx';
+import { Clock, Play, Pause, RefreshCw } from 'lucide-react';
 
 interface QueueItem {
   id: string;
@@ -21,6 +22,7 @@ interface QueueItem {
 
 export const SchedulerView: React.FC = () => {
   const { isPollingPaused, toggleGlobalPause } = useRealtime();
+  const { t } = usePreferences();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,11 +44,14 @@ export const SchedulerView: React.FC = () => {
   }, []);
 
   const formatRemaining = (seconds: number) => {
-    if (seconds <= 0) return 'در حال آماده‌سازی یا اجرا...';
+    if (seconds <= 0) return t('Preparing / Running...', 'در حال آماده‌سازی یا اجرا...');
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    if (m === 0) return `${toPersianDigits(s)} ثانیه دیگر`;
-    return `${toPersianDigits(m)} دقیقه و ${toPersianDigits(s)} ثانیه دیگر`;
+    if (m === 0) return t(`in ${s}s`, `${toPersianDigits(s)} ثانیه دیگر`);
+    return t(
+      `in ${m}m ${s}s`,
+      `${toPersianDigits(m)} دقیقه و ${toPersianDigits(s)} ثانیه دیگر`
+    );
   };
 
   return (
@@ -56,10 +61,13 @@ export const SchedulerView: React.FC = () => {
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Clock className="w-5 h-5 text-cyan-400" />
-            <span>صف زمان‌بندی و پایش خودکار</span>
+            <span>{t('Scheduler & Automated Polling Queue', 'صف زمان‌بندی و پایش خودکار')}</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            منابع به ترتیب نزدیک‌ترین زمان پایش لیست شده‌اند. جیتر تصادفی (±۲۰٪) به صورت خودکار مانع از هم‌زمانی درخواست‌ها می‌شود.
+            {t(
+              'Sources are ordered by next poll time. Random jitter (±20%) automatically prevents request spikes.',
+              'منابع به ترتیب نزدیک‌ترین زمان پایش لیست شده‌اند. جیتر تصادفی (±۲۰٪) به صورت خودکار مانع از هم‌زمانی درخواست‌ها می‌شود.'
+            )}
           </p>
         </div>
 
@@ -72,34 +80,62 @@ export const SchedulerView: React.FC = () => {
           }`}
         >
           {isPollingPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-          <span>{isPollingPaused ? 'ادامه پایش سراسری' : 'توقف تمام پایش‌ها'}</span>
+          <span>
+            {isPollingPaused
+              ? t('Resume Global Polling', 'ادامه پایش سراسری')
+              : t('Pause All Polling', 'توقف تمام پایش‌ها')}
+          </span>
         </button>
       </div>
 
       {/* Provider Floors info box */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="bg-slate-900/50 border border-slate-800 p-3.5 rounded-2xl">
-          <div className="text-[11px] text-slate-400">کف مجاز twscrape حساب:</div>
-          <div className="text-base font-bold text-cyan-400 font-mono mt-0.5">۱۵ دقیقه</div>
-          <div className="text-[10px] text-slate-500 mt-1">جلوگیری از قفل شدن اکانت</div>
+          <div className="text-[11px] text-slate-400">
+            {t('twscrape Account Floor:', 'کف مجاز twscrape حساب:')}
+          </div>
+          <div className="text-base font-bold text-cyan-400 font-mono mt-0.5">
+            {t('15 min', '۱۵ دقیقه')}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1">
+            {t('Prevents scraper account locks', 'جلوگیری از قفل شدن اکانت')}
+          </div>
         </div>
 
         <div className="bg-slate-900/50 border border-slate-800 p-3.5 rounded-2xl">
-          <div className="text-[11px] text-slate-400">کف مجاز twscrape جستجو:</div>
-          <div className="text-base font-bold text-cyan-400 font-mono mt-0.5">۳۰ دقیقه</div>
-          <div className="text-[10px] text-slate-500 mt-1">کاهش نرخ درخواست‌های جستجو</div>
+          <div className="text-[11px] text-slate-400">
+            {t('twscrape Search Floor:', 'کف مجاز twscrape جستجو:')}
+          </div>
+          <div className="text-base font-bold text-cyan-400 font-mono mt-0.5">
+            {t('30 min', '۳۰ دقیقه')}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1">
+            {t('Reduces search rate-limit pressure', 'کاهش نرخ درخواست‌های جستجو')}
+          </div>
         </div>
 
         <div className="bg-slate-900/50 border border-slate-800 p-3.5 rounded-2xl">
-          <div className="text-[11px] text-slate-400">کف مجاز Nitter RSS:</div>
-          <div className="text-base font-bold text-indigo-400 font-mono mt-0.5">۱۰ دقیقه</div>
-          <div className="text-[10px] text-slate-500 mt-1">حفظ سلامت سرورهای عمومی</div>
+          <div className="text-[11px] text-slate-400">
+            {t('Nitter RSS Floor:', 'کف مجاز Nitter RSS:')}
+          </div>
+          <div className="text-base font-bold text-indigo-400 font-mono mt-0.5">
+            {t('10 min', '۱۰ دقیقه')}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1">
+            {t('Protects public RSS mirror health', 'حفظ سلامت سرورهای عمومی')}
+          </div>
         </div>
 
         <div className="bg-slate-900/50 border border-slate-800 p-3.5 rounded-2xl">
-          <div className="text-[11px] text-slate-400">کف مجاز Official X:</div>
-          <div className="text-base font-bold text-amber-400 font-mono mt-0.5">۱۵ دقیقه</div>
-          <div className="text-[10px] text-slate-500 mt-1">کنترل هزینه سقف بودجه</div>
+          <div className="text-[11px] text-slate-400">
+            {t('Official X Floor:', 'کف مجاز Official X:')}
+          </div>
+          <div className="text-base font-bold text-amber-400 font-mono mt-0.5">
+            {t('15 min', '۱۵ دقیقه')}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1">
+            {t('Controls monthly API budget cap', 'کنترل هزینه سقف بودجه')}
+          </div>
         </div>
       </div>
 
@@ -107,32 +143,42 @@ export const SchedulerView: React.FC = () => {
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-200">
-            صف اجرای بعدی ({toPersianDigits(queue.length)} منبع فعال)
+            {t(
+              `Upcoming Poll Queue (${queue.length} active sources)`,
+              `صف اجرای بعدی (${toPersianDigits(queue.length)} منبع فعال)`
+            )}
           </h3>
           <button
             onClick={fetchQueue}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-            title="به‌روزرسانی صف"
+            className="p-1.5 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-slate-800"
+            title={t('Refresh Queue', 'به‌روزرسانی صف')}
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {isLoading ? (
-          <div className="p-8 text-center text-slate-500 text-xs">در حال بارگذاری صف...</div>
+          <div className="p-8 text-center text-slate-500 text-xs">
+            {t('Loading scheduler queue...', 'در حال بارگذاری صف...')}
+          </div>
         ) : queue.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-xs">هیچ منبع فعالی در صف وجود ندارد.</div>
+          <div className="p-8 text-center text-slate-500 text-xs">
+            {t('No active sources in queue.', 'هیچ منبع فعالی در صف وجود ندارد.')}
+          </div>
         ) : (
           <div className="divide-y divide-slate-800/60">
             {queue.map((item, idx) => (
-              <div key={item.id} className="p-4 flex items-center justify-between gap-3 hover:bg-slate-900/90 transition-colors">
+              <div
+                key={item.id}
+                className="p-4 flex items-center justify-between gap-3 hover:bg-slate-900/90 transition-colors"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-slate-800 font-mono text-xs flex items-center justify-center text-slate-400">
                     {toPersianDigits(idx + 1)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-slate-200">
+                      <span className="font-bold text-sm text-slate-200" dir="ltr">
                         {item.type === 'account' ? `@${item.value}` : item.value}
                       </span>
                       {item.groupName && (
@@ -143,13 +189,16 @@ export const SchedulerView: React.FC = () => {
                       <span className="text-[11px] text-slate-500 font-mono">({item.provider})</span>
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">
-                      تناوب: هر {toPersianDigits(item.effectiveIntervalMinutes)} دقیقه • آخرین پایش:{' '}
-                      {item.lastPolledAt ? toRelativeTimeFa(item.lastPolledAt) : 'هنوز انجام نشده'}
+                      {t(
+                        `Interval: Every ${item.effectiveIntervalMinutes}m • Last Poll: `,
+                        `تناوب: هر ${toPersianDigits(item.effectiveIntervalMinutes)} دقیقه • آخرین پایش: `
+                      )}
+                      {item.lastPolledAt ? toRelativeTimeFa(item.lastPolledAt) : t('Never', 'هنوز انجام نشده')}
                     </div>
                   </div>
                 </div>
 
-                <div className="text-left font-mono">
+                <div className="text-end font-mono">
                   <div className="text-xs font-bold text-cyan-400">
                     {formatRemaining(item.remainingSeconds)}
                   </div>
@@ -165,3 +214,4 @@ export const SchedulerView: React.FC = () => {
     </div>
   );
 };
+

@@ -2,25 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { Source, SourceGroup } from '../../types.ts';
 import { apiRequest } from '../../utils/api.ts';
 import { toRelativeTimeFa, toJalaliDate, toPersianDigits } from '../../utils/date.ts';
+import { usePreferences } from '../../context/PreferencesContext.tsx';
 import {
   Plus,
-  Play,
   RotateCw,
   Trash2,
-  Edit2,
   FileText,
   AlertCircle,
-  HelpCircle,
   Eye,
-  CheckCircle,
-  Layers,
   Clock,
-  DollarSign,
-  Activity,
   X,
 } from 'lucide-react';
 
 export const SourcesView: React.FC = () => {
+  const { t } = usePreferences();
   const [sources, setSources] = useState<Source[]>([]);
   const [groups, setGroups] = useState<SourceGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +43,7 @@ export const SourcesView: React.FC = () => {
   // Bulk Import text
   const [bulkText, setBulkText] = useState('');
   const [bulkType, setBulkType] = useState('account');
+  const [statusBanner, setStatusBanner] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -71,15 +67,22 @@ export const SourcesView: React.FC = () => {
 
   const handlePollNow = async (source: Source) => {
     setIsPollLoading((prev) => ({ ...prev, [source.id]: true }));
+    setStatusBanner(null);
     try {
       const res = await apiRequest<{ ok: boolean; newPostsCount: number; message: string }>(
         `/api/sources/${source.id}/poll-now`,
         { method: 'POST' }
       );
-      alert(res.message);
+      setStatusBanner({
+        ok: true,
+        message: t(
+          `Poll completed for ${source.display_name || source.value} (${res.newPostsCount} new posts).`,
+          res.message
+        ),
+      });
       loadData();
     } catch (err: any) {
-      alert(`خطا در پایش: ${err.message}`);
+      setStatusBanner({ ok: false, message: `${t('Poll failed:', 'خطا در پایش:')} ${err.message}` });
     } finally {
       setIsPollLoading((prev) => ({ ...prev, [source.id]: false }));
     }
@@ -90,17 +93,21 @@ export const SourcesView: React.FC = () => {
       const data = await apiRequest(`/api/sources/${id}/dry-run`);
       setDryRunData(data);
     } catch (err: any) {
-      alert(`خطا در دریافت بررسی شبیه‌سازی: ${err.message}`);
+      setStatusBanner({ ok: false, message: `${t('Dry run error:', 'خطا در بررسی شبیه‌سازی:')} ${err.message}` });
     }
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`آیا از حذف منبع «${name}» اطمینان دارید؟`)) return;
+    setStatusBanner(null);
     try {
       await apiRequest(`/api/sources/${id}`, { method: 'DELETE' });
       setSources((prev) => prev.filter((s) => s.id !== id));
+      setStatusBanner({
+        ok: true,
+        message: t(`Source "${name}" deleted successfully.`, `منبع «${name}» با موفقیت حذف گردید.`),
+      });
     } catch (err: any) {
-      alert(err.message);
+      setStatusBanner({ ok: false, message: err.message });
     }
   };
 
@@ -111,11 +118,9 @@ export const SourcesView: React.FC = () => {
         method: 'PUT',
         body: JSON.stringify({ enabled: newVal }),
       });
-      setSources((prev) =>
-        prev.map((s) => (s.id === source.id ? { ...s, enabled: newVal } : s))
-      );
+      setSources((prev) => prev.map((s) => (s.id === source.id ? { ...s, enabled: newVal } : s)));
     } catch (err: any) {
-      alert(err.message);
+      setStatusBanner({ ok: false, message: err.message });
     }
   };
 
@@ -145,6 +150,10 @@ export const SourcesView: React.FC = () => {
       setShowAddModal(false);
       setFormValue('');
       setFormDisplayName('');
+      setStatusBanner({
+        ok: true,
+        message: t('New source added successfully.', 'منبع جدید با موفقیت اضافه شد.'),
+      });
       loadData();
     } catch (err: any) {
       setFormError(err.message);
@@ -153,6 +162,7 @@ export const SourcesView: React.FC = () => {
 
   const handleBulkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setStatusBanner(null);
     try {
       const res = await apiRequest<{ ok: boolean; count: number; message: string }>('/api/sources/bulk', {
         method: 'POST',
@@ -162,12 +172,15 @@ export const SourcesView: React.FC = () => {
           group_id: formGroupId || undefined,
         }),
       });
-      alert(res.message);
+      setStatusBanner({
+        ok: true,
+        message: t(`Bulk import completed (${res.count || ''} sources added).`, res.message),
+      });
       setShowBulkModal(false);
       setBulkText('');
       loadData();
     } catch (err: any) {
-      alert(err.message);
+      setStatusBanner({ ok: false, message: err.message });
     }
   };
 
@@ -177,13 +190,16 @@ export const SourcesView: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <span>منابع پایش فعال</span>
+            <span>{t('Monitored Sources', 'منابع پایش فعال')}</span>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono font-bold">
-              {toPersianDigits(sources.length)} منبع
+              {toPersianDigits(sources.length)} {t('sources', 'منبع')}
             </span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            حساب‌های توییتر، هشتگ‌ها، کلیدواژه‌ها یا پرس‌وجوهای پیچیده با زمان‌بندی مستقل
+            {t(
+              'X accounts, hashtags, keywords, or advanced search queries with independent polling intervals',
+              'حساب‌های توییتر، هشتگ‌ها، کلیدواژه‌ها یا پرس‌وجوهای پیچیده با زمان‌بندی مستقل'
+            )}
           </p>
         </div>
 
@@ -193,7 +209,7 @@ export const SourcesView: React.FC = () => {
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>افزودن دسته‌جمعی</span>
+            <span>{t('Bulk Import', 'افزودن دسته‌جمعی')}</span>
           </button>
 
           <button
@@ -201,17 +217,36 @@ export const SourcesView: React.FC = () => {
             className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>منبع جدید</span>
+            <span>{t('New Source', 'منبع جدید')}</span>
           </button>
         </div>
       </div>
 
+      {statusBanner && (
+        <div
+          className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+            statusBanner.ok
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+          }`}
+        >
+          <span>{statusBanner.message}</span>
+          <button onClick={() => setStatusBanner(null)} className="text-slate-400 hover:text-slate-100">
+            {t('Dismiss', 'بستن')}
+          </button>
+        </div>
+      )}
+
       {/* Sources Table / Cards */}
       {isLoading ? (
-        <div className="p-12 text-center text-slate-500 text-sm">در حال بارگذاری منابع...</div>
+        <div className="p-12 text-center text-slate-500 text-sm">
+          {t('Loading monitored sources...', 'در حال بارگذاری منابع...')}
+        </div>
       ) : sources.length === 0 ? (
         <div className="p-12 text-center bg-slate-900/40 border border-slate-800 rounded-2xl">
-          <p className="text-slate-400 text-sm">هنوز منبعی اضافه نکرده‌اید.</p>
+          <p className="text-slate-400 text-sm">
+            {t('No sources added yet.', 'هنوز منبعی اضافه نکرده‌اید.')}
+          </p>
         </div>
       ) : (
         <div className="grid gap-3.5">
@@ -233,7 +268,7 @@ export const SourcesView: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-slate-100 text-sm">{s.display_name || s.value}</span>
-                      <span className="text-xs text-slate-400 font-mono">
+                      <span className="text-xs text-slate-400 font-mono" dir="ltr">
                         {s.type === 'account' ? `@${s.value}` : s.value}
                       </span>
                       {s.group_name && (
@@ -249,7 +284,7 @@ export const SourcesView: React.FC = () => {
                         </span>
                       )}
                       <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                        اولویت: {toPersianDigits(s.priority || 3)}
+                        {t('Priority:', 'اولویت:')} {toPersianDigits(s.priority || 3)}
                       </span>
                     </div>
 
@@ -257,21 +292,38 @@ export const SourcesView: React.FC = () => {
                     <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 flex-wrap">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        <span>تناوب: هر {toPersianDigits(s.effective_interval_minutes)} دقیقه</span>
+                        <span>
+                          {t(
+                            `Interval: Every ${s.effective_interval_minutes}m`,
+                            `تناوب: هر ${toPersianDigits(s.effective_interval_minutes)} دقیقه`
+                          )}
+                        </span>
                         <span className="text-[10px] text-slate-500">
-                          ({s.effective_interval_level === 'source' ? 'اختصاصی' : s.effective_interval_level === 'group' ? 'از گروه' : 'پیش‌فرض'})
+                          (
+                          {s.effective_interval_level === 'source'
+                            ? t('Custom', 'اختصاصی')
+                            : s.effective_interval_level === 'group'
+                            ? t('Group', 'از گروه')
+                            : t('Default', 'پیش‌فرض')}
+                          )
                         </span>
                       </span>
 
                       <span>•</span>
-                      <span>ارائه‌دهنده: {s.provider || 'twscrape (پیش‌فرض)'}</span>
+                      <span>
+                        {t('Provider:', 'ارائه‌دهنده:')}{' '}
+                        {s.provider || t('twscrape (default)', 'twscrape (پیش‌فرض)')}
+                      </span>
 
                       <span>•</span>
-                      <span>پست امروز: {toPersianDigits(s.posts_today || 0)}</span>
+                      <span>
+                        {t('Today:', 'پست امروز:')} {toPersianDigits(s.posts_today || 0)}
+                      </span>
 
                       <span>•</span>
-                      <span title={s.last_polled_at ? toJalaliDate(s.last_polled_at) : 'تاکنون انجام نشده'}>
-                        آخرین پایش: {s.last_polled_at ? toRelativeTimeFa(s.last_polled_at) : 'هنوز انجام نشده'}
+                      <span title={s.last_polled_at ? toJalaliDate(s.last_polled_at) : t('Never polled', 'تاکنون انجام نشده')}>
+                        {t('Last Poll:', 'آخرین پایش:')}{' '}
+                        {s.last_polled_at ? toRelativeTimeFa(s.last_polled_at) : t('Never', 'هنوز انجام نشده')}
                       </span>
                     </div>
                   </div>
@@ -283,16 +335,16 @@ export const SourcesView: React.FC = () => {
                     onClick={() => handlePollNow(s)}
                     disabled={isPollLoading[s.id]}
                     className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                    title="اجرای دستی پایش منبع"
+                    title={t('Poll this source immediately', 'اجرای دستی پایش منبع')}
                   >
                     <RotateCw className={`w-3.5 h-3.5 ${isPollLoading[s.id] ? 'animate-spin text-cyan-400' : ''}`} />
-                    <span>پایش فوری</span>
+                    <span>{t('Poll Now', 'پایش فوری')}</span>
                   </button>
 
                   <button
                     onClick={() => handleDryRun(s.id)}
                     className="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-cyan-400 text-xs font-medium border border-slate-800 flex items-center gap-1 transition-colors"
-                    title="شبیه‌سازی و تخمین هزینه"
+                    title={t('Simulate & estimate monthly API cost', 'شبیه‌سازی و تخمین هزینه')}
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>Dry Run</span>
@@ -306,13 +358,13 @@ export const SourcesView: React.FC = () => {
                         : 'bg-slate-800 text-slate-400 border-slate-700'
                     }`}
                   >
-                    {s.enabled ? 'فعال' : 'غیرفعال'}
+                    {s.enabled ? t('Enabled', 'فعال') : t('Disabled', 'غیرفعال')}
                   </button>
 
                   <button
                     onClick={() => handleDelete(s.id, s.display_name || s.value)}
                     className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
-                    title="حذف منبع"
+                    title={t('Delete source', 'حذف منبع')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -324,7 +376,7 @@ export const SourcesView: React.FC = () => {
                 <div className="mt-3 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 text-rose-400 flex-shrink-0" />
                   <div>
-                    <span className="font-bold">خطا در آخرین پایش: </span>
+                    <span className="font-bold">{t('Last Poll Error: ', 'خطا در آخرین پایش: ')}</span>
                     <span>{s.last_error}</span>
                   </div>
                 </div>
@@ -339,8 +391,10 @@ export const SourcesView: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-slate-100">افزودن منبع پایش جدید</h3>
-              <button onClick={() => setShowAddModal(false)} className="p-1 text-slate-400 hover:text-white">
+              <h3 className="text-base font-bold text-slate-100">
+                {t('Add Monitored Source', 'افزودن منبع پایش جدید')}
+              </h3>
+              <button onClick={() => setShowAddModal(false)} className="p-1 text-slate-400 hover:text-slate-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -354,26 +408,28 @@ export const SourcesView: React.FC = () => {
             <form onSubmit={handleAddSubmit} className="space-y-4 text-xs">
               {/* Type */}
               <div>
-                <label className="block text-slate-300 font-medium mb-1.5">نوع منبع:</label>
+                <label className="block text-slate-300 font-medium mb-1.5">
+                  {t('Source Type:', 'نوع منبع:')}
+                </label>
                 <div className="grid grid-cols-4 gap-2">
-                  {(['account', 'hashtag', 'keyword', 'query'] as const).map((t) => (
+                  {(['account', 'hashtag', 'keyword', 'query'] as const).map((typeKey) => (
                     <button
                       type="button"
-                      key={t}
-                      onClick={() => setFormType(t)}
+                      key={typeKey}
+                      onClick={() => setFormType(typeKey)}
                       className={`py-2 rounded-xl border text-center font-medium transition-colors ${
-                        formType === t
+                        formType === typeKey
                           ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
                           : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      {t === 'account'
-                        ? 'حساب کاربر'
-                        : t === 'hashtag'
-                        ? 'هشتگ'
-                        : t === 'keyword'
-                        ? 'کلیدواژه'
-                        : 'کوئری X'}
+                      {typeKey === 'account'
+                        ? t('Account', 'حساب کاربر')
+                        : typeKey === 'hashtag'
+                        ? t('Hashtag', 'هشتگ')
+                        : typeKey === 'keyword'
+                        ? t('Keyword', 'کلیدواژه')
+                        : t('X Query', 'کوئری X')}
                     </button>
                   ))}
                 </div>
@@ -383,37 +439,47 @@ export const SourcesView: React.FC = () => {
               <div>
                 <label className="block text-slate-300 font-medium mb-1.5">
                   {formType === 'account'
-                    ? 'نام کاربری (بدون @):'
+                    ? t('Username (without @):', 'نام کاربری (بدون @):')
                     : formType === 'hashtag'
-                    ? 'عنوان هشتگ (بدون #):'
-                    : 'عبارت یا کوئری پایش:'}
+                    ? t('Hashtag (without #):', 'عنوان هشتگ (بدون #):')
+                    : t('Keyword or Search Query:', 'عبارت یا کوئری پایش:')}
                 </label>
                 <input
                   type="text"
                   required
                   value={formValue}
                   onChange={(e) => setFormValue(e.target.value)}
-                  placeholder={formType === 'account' ? 'elonmusk' : formType === 'hashtag' ? 'هوش_مصنوعی' : 'استارتاپ'}
+                  placeholder={
+                    formType === 'account'
+                      ? 'elonmusk'
+                      : formType === 'hashtag'
+                      ? t('AI', 'هوش_مصنوعی')
+                      : t('openai', 'استارتاپ')
+                  }
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 />
               </div>
 
               {/* Display Name */}
               <div>
-                <label className="block text-slate-300 font-medium mb-1.5">نام نمایشی (اختیاری):</label>
+                <label className="block text-slate-300 font-medium mb-1.5">
+                  {t('Display Name (Optional):', 'نام نمایشی (اختیاری):')}
+                </label>
                 <input
                   type="text"
                   value={formDisplayName}
                   onChange={(e) => setFormDisplayName(e.target.value)}
-                  placeholder="مثال: ایلان ماسک"
+                  placeholder={t('e.g. Elon Musk', 'مثال: ایلان ماسک')}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 />
               </div>
 
               {/* Interval & Unit */}
               <div>
-                <label className="block text-slate-300 font-medium mb-1.5">تناوب پایش:</label>
-                <div className="flex items-center gap-2">
+                <label className="block text-slate-300 font-medium mb-1.5">
+                  {t('Polling Interval:', 'تناوب پایش:')}
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
                   <input
                     type="number"
                     min="1"
@@ -426,12 +492,12 @@ export const SourcesView: React.FC = () => {
                     onChange={(e) => setFormIntervalUnit(e.target.value as any)}
                     className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   >
-                    <option value="minutes">دقیقه</option>
-                    <option value="hours">ساعت</option>
+                    <option value="minutes">{t('Minutes', 'دقیقه')}</option>
+                    <option value="hours">{t('Hours', 'ساعت')}</option>
                   </select>
 
                   {/* Presets */}
-                  <div className="flex items-center gap-1 mr-2 flex-wrap">
+                  <div className="flex items-center gap-1 ms-2 flex-wrap">
                     {[15, 30, 60, 180, 360].map((m) => (
                       <button
                         type="button"
@@ -451,13 +517,15 @@ export const SourcesView: React.FC = () => {
 
               {/* Group */}
               <div>
-                <label className="block text-slate-300 font-medium mb-1.5">گروه / دسته‌بندی:</label>
+                <label className="block text-slate-300 font-medium mb-1.5">
+                  {t('Group / Category:', 'گروه / دسته‌بندی:')}
+                </label>
                 <select
                   value={formGroupId}
                   onChange={(e) => setFormGroupId(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 >
-                  <option value="">بدون گروه (پیش‌فرض)</option>
+                  <option value="">{t('No Group (Default)', 'بدون گروه (پیش‌فرض)')}</option>
                   {groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -469,18 +537,18 @@ export const SourcesView: React.FC = () => {
               {/* Provider Override */}
               <div>
                 <label className="block text-slate-300 font-medium mb-1.5">
-                  ارائه‌دهنده داده (اختیاری — پیش‌فرض سامانه اعمال می‌شود):
+                  {t('Data Provider (Optional — inherits system default):', 'ارائه‌دهنده داده (اختیاری — پیش‌فرض سامانه اعمال می‌شود):')}
                 </label>
                 <select
                   value={formProvider}
                   onChange={(e) => setFormProvider(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 >
-                  <option value="">استفاده از پیش‌فرض سامانه</option>
-                  <option value="twscrape">twscrape (سایدکار - رایگان)</option>
-                  <option value="nitter-rss">Nitter RSS (فید عمومی - رایگان)</option>
-                  <option value="x-official">Official X API v2 (پرداخت بر اساس مصرف)</option>
-                  <option value="twitterapi-io">twitterapi.io (سرویس شخص ثالث)</option>
+                  <option value="">{t('Use System Default', 'استفاده از پیش‌فرض سامانه')}</option>
+                  <option value="twscrape">{t('twscrape (Sidecar - Free)', 'twscrape (سایدکار - رایگان)')}</option>
+                  <option value="nitter-rss">{t('Nitter RSS (Public Feed - Free)', 'Nitter RSS (فید عمومی - رایگان)')}</option>
+                  <option value="x-official">{t('Official X API v2 (Pay-per-use)', 'Official X API v2 (پرداخت بر اساس مصرف)')}</option>
+                  <option value="twitterapi-io">{t('twitterapi.io (3rd-Party Paid)', 'twitterapi.io (سرویس شخص ثالث)')}</option>
                 </select>
               </div>
 
@@ -493,7 +561,7 @@ export const SourcesView: React.FC = () => {
                     onChange={(e) => setFormExcludeRetweets(e.target.checked)}
                     className="rounded bg-slate-950 border-slate-800 text-cyan-500"
                   />
-                  <span>حذف بازتوییت‌ها</span>
+                  <span>{t('Exclude Retweets', 'حذف بازتوییت‌ها')}</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer text-slate-300">
                   <input
@@ -502,7 +570,7 @@ export const SourcesView: React.FC = () => {
                     onChange={(e) => setFormExcludeReplies(e.target.checked)}
                     className="rounded bg-slate-950 border-slate-800 text-cyan-500"
                   />
-                  <span>حذف پاسخ‌ها</span>
+                  <span>{t('Exclude Replies', 'حذف پاسخ‌ها')}</span>
                 </label>
               </div>
 
@@ -512,13 +580,13 @@ export const SourcesView: React.FC = () => {
                   onClick={() => setShowAddModal(false)}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300"
                 >
-                  انصراف
+                  {t('Cancel', 'انصراف')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
                 >
-                  افزودن منبع
+                  {t('Add Source', 'افزودن منبع')}
                 </button>
               </div>
             </form>
@@ -531,22 +599,28 @@ export const SourcesView: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-slate-100">افزودن دسته‌جمعی منابع</h3>
-              <button onClick={() => setShowBulkModal(false)} className="p-1 text-slate-400 hover:text-white">
+              <h3 className="text-base font-bold text-slate-100">
+                {t('Bulk Import Sources', 'افزودن دسته‌جمعی منابع')}
+              </h3>
+              <button onClick={() => setShowBulkModal(false)} className="p-1 text-slate-400 hover:text-slate-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleBulkSubmit} className="space-y-4 text-xs">
               <p className="text-slate-400">
-                لیستی از حساب‌ها یا هشتگ‌ها را وارد کنید (هر کدام در یک خط). هشتگ‌ها با # یا حساب‌ها با @ می‌توانند مشخص شوند.
+                {t(
+                  'Enter a list of accounts or hashtags (one per line). Prefix hashtags with # and accounts with @.',
+                  'لیستی از حساب‌ها یا هشتگ‌ها را وارد کنید (هر کدام در یک خط). هشتگ‌ها با # یا حساب‌ها با @ می‌توانند مشخص شوند.'
+                )}
               </p>
               <textarea
                 rows={8}
                 required
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
-                placeholder={'@sama\n@elonmusk\n#هوش_مصنوعی\n#استارتاپ'}
+                placeholder={'@sama\n@elonmusk\n#AI\n#Startups'}
+                dir="ltr"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
               />
 
@@ -556,13 +630,13 @@ export const SourcesView: React.FC = () => {
                   onClick={() => setShowBulkModal(false)}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300"
                 >
-                  انصراف
+                  {t('Cancel', 'انصراف')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
                 >
-                  ثبت منابع
+                  {t('Import Sources', 'ثبت منابع')}
                 </button>
               </div>
             </form>
@@ -577,9 +651,9 @@ export const SourcesView: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <Eye className="w-4 h-4 text-cyan-400" />
-                <span>شبیه‌سازی و تخمین هزینه (Dry Run)</span>
+                <span>{t('Cost & Call Simulation (Dry Run)', 'شبیه‌سازی و تخمین هزینه (Dry Run)')}</span>
               </h3>
-              <button onClick={() => setDryRunData(null)} className="p-1 text-slate-400 hover:text-white">
+              <button onClick={() => setDryRunData(null)} className="p-1 text-slate-400 hover:text-slate-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -587,14 +661,14 @@ export const SourcesView: React.FC = () => {
             <div className="space-y-3 text-xs">
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
                 <div>
-                  <span className="text-slate-400">منبع: </span>
+                  <span className="text-slate-400">{t('Source: ', 'منبع: ')}</span>
                   <span className="text-cyan-400 font-bold">{dryRunData.source.value}</span>
                   <span className="text-slate-500"> ({dryRunData.source.type})</span>
                 </div>
                 <div>
-                  <span className="text-slate-400">تعداد پایش تخمینی در ماه: </span>
+                  <span className="text-slate-400">{t('Estimated Monthly Polls: ', 'تعداد پایش تخمینی در ماه: ')}</span>
                   <span className="font-mono text-slate-200">
-                    {toPersianDigits(dryRunData.source.pollsPerMonth)} بار
+                    {toPersianDigits(dryRunData.source.pollsPerMonth)} {t('polls', 'بار')}
                   </span>
                 </div>
               </div>
@@ -606,9 +680,9 @@ export const SourcesView: React.FC = () => {
                   <div className="font-bold text-slate-200">Official X API v2</div>
                   <div className="font-mono text-lg text-amber-400 font-bold">
                     ${dryRunData.officialX.estimatedMonthlyUsd}
-                    <span className="text-[10px] text-slate-500 font-normal"> / ماه</span>
+                    <span className="text-[10px] text-slate-500 font-normal"> / {t('mo', 'ماه')}</span>
                   </div>
-                  <div className="text-[11px] text-slate-400 font-mono break-all bg-slate-900 p-2 rounded-lg">
+                  <div className="text-[11px] text-slate-400 font-mono break-all bg-slate-900 p-2 rounded-lg" dir="ltr">
                     {dryRunData.officialX.endpoint}
                   </div>
                   <div className="text-[10px] text-slate-500">{dryRunData.officialX.auth}</div>
@@ -619,9 +693,9 @@ export const SourcesView: React.FC = () => {
                   <div className="font-bold text-slate-200">twitterapi.io</div>
                   <div className="font-mono text-lg text-emerald-400 font-bold">
                     ${dryRunData.twitterApiIo.estimatedMonthlyUsd}
-                    <span className="text-[10px] text-slate-500 font-normal"> / ماه</span>
+                    <span className="text-[10px] text-slate-500 font-normal"> / {t('mo', 'ماه')}</span>
                   </div>
-                  <div className="text-[11px] text-slate-400 font-mono break-all bg-slate-900 p-2 rounded-lg">
+                  <div className="text-[11px] text-slate-400 font-mono break-all bg-slate-900 p-2 rounded-lg" dir="ltr">
                     {dryRunData.twitterApiIo.endpoint}
                   </div>
                   <div className="text-[10px] text-slate-500">{dryRunData.twitterApiIo.auth}</div>
@@ -629,10 +703,20 @@ export const SourcesView: React.FC = () => {
               </div>
 
               {/* Free Providers Note */}
-              <div className="p-3 rounded-xl bg-cyan-950/20 border border-cyan-800/30 text-cyan-300 space-y-1">
-                <div className="font-bold">ارائه‌دهندگان رایگان (پیش‌فرض):</div>
-                <div>• twscrape: هزینه صفر دلار (مصرف منابع سرور خودتان با کوکی حساب اختصاصی)</div>
-                <div>• Nitter RSS: هزینه صفر دلار (دریافت مستقیم از فید عمومی)</div>
+              <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 space-y-1">
+                <div className="font-bold">{t('Free Providers (Default):', 'ارائه‌دهندگان رایگان (پیش‌فرض):')}</div>
+                <div>
+                  {t(
+                    '• twscrape: $0/month (uses local scraper pool & syndication fallback)',
+                    '• twscrape: هزینه صفر دلار (مصرف منابع سرور خودتان با کوکی حساب اختصاصی)'
+                  )}
+                </div>
+                <div>
+                  {t(
+                    '• Nitter RSS: $0/month (fetches directly from public RSS mirrors)',
+                    '• Nitter RSS: هزینه صفر دلار (دریافت مستقیم از فید عمومی)'
+                  )}
+                </div>
               </div>
             </div>
 
@@ -641,7 +725,7 @@ export const SourcesView: React.FC = () => {
                 onClick={() => setDryRunData(null)}
                 className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium"
               >
-                بستن
+                {t('Close', 'بستن')}
               </button>
             </div>
           </div>
@@ -650,3 +734,4 @@ export const SourcesView: React.FC = () => {
     </div>
   );
 };
+

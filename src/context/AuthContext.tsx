@@ -1,45 +1,69 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiRequest } from '../utils/api.ts';
 
+export interface UserProfile {
+  username: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   username: string | null;
+  user: UserProfile | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  updateUserState: (user: UserProfile) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   username: null,
+  user: null,
   isLoading: true,
   login: async () => {},
   logout: async () => {},
+  refreshProfile: async () => {},
+  updateUserState: () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const normalizeUser = (u: any): UserProfile => ({
+    username: u?.username || 'admin',
+    displayName: u?.displayName || u?.username || 'Admin User',
+    email: u?.email || 'admin@xmonitor.io',
+    avatarUrl: u?.avatarUrl || '',
+  });
 
   const checkStatus = async () => {
     try {
-      const data = await apiRequest<{ authenticated: boolean; user?: { username: string }; token?: string }>('/api/auth/status');
+      const data = await apiRequest<{
+        authenticated: boolean;
+        user?: UserProfile;
+        token?: string;
+      }>('/api/auth/status');
       if (data.authenticated && data.user) {
         if (data.token) {
           localStorage.setItem('xmonitor_token', data.token);
         }
         setIsAuthenticated(true);
-        setUsername(data.user.username);
+        setUser(normalizeUser(data.user));
       } else {
         localStorage.removeItem('xmonitor_token');
         setIsAuthenticated(false);
-        setUsername(null);
+        setUser(null);
       }
     } catch {
       localStorage.removeItem('xmonitor_token');
       setIsAuthenticated(false);
-      setUsername(null);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -51,24 +75,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleUnauthorized = () => {
       localStorage.removeItem('xmonitor_token');
       setIsAuthenticated(false);
-      setUsername(null);
+      setUser(null);
     };
 
     window.addEventListener('auth-unauthorized', handleUnauthorized);
     return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
   }, []);
 
-  const login = async (user: string, pass: string) => {
-    const data = await apiRequest<{ ok: boolean; user: { username: string }; token?: string }>('/api/auth/login', {
+  const login = async (usernameInput: string, pass: string) => {
+    const data = await apiRequest<{ ok: boolean; user: UserProfile; token?: string }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username: user, password: pass }),
+      body: JSON.stringify({ username: usernameInput, password: pass }),
     });
     if (data.ok) {
       if (data.token) {
         localStorage.setItem('xmonitor_token', data.token);
       }
       setIsAuthenticated(true);
-      setUsername(data.user.username);
+      setUser(normalizeUser(data.user));
     }
   };
 
@@ -78,15 +102,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       localStorage.removeItem('xmonitor_token');
       setIsAuthenticated(false);
-      setUsername(null);
+      setUser(null);
     }
   };
 
+  const refreshProfile = async () => {
+    try {
+      const data = await apiRequest<{ user: UserProfile }>('/api/auth/profile');
+      if (data.user) {
+        setUser(normalizeUser(data.user));
+      }
+    } catch {}
+  };
+
+  const updateUserState = (updated: UserProfile) => {
+    setUser(normalizeUser(updated));
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, username, isLoading, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        username: user?.username || null,
+        user,
+        isLoading,
+        login,
+        logout,
+        refreshProfile,
+        updateUserState,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => useContext(AuthContext);
+

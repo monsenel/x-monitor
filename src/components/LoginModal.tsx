@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.tsx';
-import { Lock, User, AlertCircle, ArrowLeft } from 'lucide-react';
+import { usePreferences } from '../context/PreferencesContext.tsx';
+import { Lock, User, AlertCircle, ArrowRight, ArrowLeft, Sun, Moon, Languages } from 'lucide-react';
 
 export const LoginModal: React.FC = () => {
   const { login } = useAuth();
+  const { lang, toggleLang, theme, toggleTheme, t, isRtl } = usePreferences();
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -17,14 +19,33 @@ export const LoginModal: React.FC = () => {
     try {
       await login(username, password);
     } catch (err: any) {
-      setError(err.message || 'نام کاربری یا رمز عبور نامعتبر است.');
+      setError(err.message || t('Invalid username or password.', 'نام کاربری یا رمز عبور نامعتبر است.'));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative">
+      {/* Top corner Language & Theme controls */}
+      <div className="fixed top-4 right-4 flex items-center gap-2 z-20">
+        <button
+          type="button"
+          onClick={toggleLang}
+          className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800 transition-colors"
+        >
+          <Languages className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="font-mono">{lang === 'en' ? 'فارسی' : 'English'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 hover:bg-slate-800 transition-colors"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-cyan-400" />}
+        </button>
+      </div>
+
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -33,9 +54,14 @@ export const LoginModal: React.FC = () => {
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-slate-100">ورود به سامانه X Monitor</h2>
+          <h2 className="text-xl font-bold text-slate-100">
+            {t('Sign in to X Monitor', 'ورود به سامانه X Monitor')}
+          </h2>
           <p className="text-xs text-slate-400">
-            پنل اختصاصی پایش هوشمند حساب‌ها و هشتگ‌های شبکه توییتر
+            {t(
+              'Intelligent monitoring platform for X accounts, hashtags, and search queries',
+              'پنل اختصاصی پایش هوشمند حساب‌ها و هشتگ‌های شبکه توییتر'
+            )}
           </p>
         </div>
 
@@ -48,9 +74,15 @@ export const LoginModal: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1.5">نام کاربری:</label>
+            <label className="block text-slate-300 font-medium mb-1.5">
+              {t('Username or Email:', 'نام کاربری یا ایمیل:')}
+            </label>
             <div className="relative">
-              <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+              <div
+                className={`absolute inset-y-0 ${
+                  isRtl ? 'right-0 pr-3.5' : 'left-0 pl-3.5'
+                } flex items-center pointer-events-none text-slate-400`}
+              >
                 <User className="w-4 h-4" />
               </div>
               <input
@@ -59,15 +91,24 @@ export const LoginModal: React.FC = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="admin"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-10 pl-3 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                dir="ltr"
+                className={`w-full bg-slate-950 border border-slate-800 rounded-xl ${
+                  isRtl ? 'pr-10 pl-3' : 'pl-10 pr-3'
+                } py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/50`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1.5">رمز عبور:</label>
+            <label className="block text-slate-300 font-medium mb-1.5">
+              {t('Password:', 'رمز عبور:')}
+            </label>
             <div className="relative">
-              <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+              <div
+                className={`absolute inset-y-0 ${
+                  isRtl ? 'right-0 pr-3.5' : 'left-0 pl-3.5'
+                } flex items-center pointer-events-none text-slate-400`}
+              >
                 <Lock className="w-4 h-4" />
               </div>
               <input
@@ -76,7 +117,10 @@ export const LoginModal: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-10 pl-3 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono"
+                dir="ltr"
+                className={`w-full bg-slate-950 border border-slate-800 rounded-xl ${
+                  isRtl ? 'pr-10 pl-3' : 'pl-10 pr-3'
+                } py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono`}
               />
             </div>
           </div>
@@ -86,17 +130,22 @@ export const LoginModal: React.FC = () => {
             disabled={isLoading}
             className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
           >
-            <span>{isLoading ? 'در حال بررسی...' : 'ورود به پنل'}</span>
-            <ArrowLeft className="w-4 h-4" />
+            <span>{isLoading ? t('Verifying...', 'در حال بررسی...') : t('Sign In', 'ورود به پنل')}</span>
+            {isRtl ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
           </button>
         </form>
 
         <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-500 text-center leading-relaxed">
-          رمز عبور پیش‌فرض نصب: <code className="text-cyan-400 font-mono">admin123456</code>
+          {t('Default initial password:', 'رمز عبور پیش‌فرض نصب:')}{' '}
+          <code className="text-cyan-400 font-mono">admin123456</code>
           <br />
-          می‌توانید با دستور <code className="text-cyan-400 font-mono">npm run hash-password</code> رمز اختصاصی ایجاد کنید.
+          {t(
+            'You can change your password anytime in Profile Settings.',
+            'می‌توانید پس از ورود از بخش تنظیمات پروفایل رمز عبور را تغییر دهید.'
+          )}
         </div>
       </div>
     </div>
   );
 };
+

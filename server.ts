@@ -35,7 +35,7 @@ initDatabase();
 seedInitialDataIfNeeded();
 
 // Middleware
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 
 // Security Headers & strict CSP
@@ -50,7 +50,7 @@ app.use((_req, res, next) => {
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https://pbs.twimg.com https://abs.twimg.com blob:",
+      "img-src 'self' data: https: http: blob:",
       "connect-src 'self' ws: wss:",
     ].join('; ')
   );

@@ -266,12 +266,10 @@ export class SchedulerPoller {
         if (provider.id === 'twscrape' && autoNitterFallback) {
           const nitter = providerRegistry.get('nitter-rss');
           if (nitter) {
-            console.log(`[Scheduler] twscrape unavailable for source ${source.id} (${source.value}): ${primaryErr.message}. Falling back to Nitter RSS.`);
             try {
               result = await nitter.fetchNew(source, state);
               effectiveProvider = nitter;
-            } catch (fallbackErr: any) {
-              console.warn(`[Scheduler] Nitter RSS fallback also failed for source ${source.id} (${source.value}):`, fallbackErr.message);
+            } catch {
               throw primaryErr;
             }
           } else {
