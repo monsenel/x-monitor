@@ -10,7 +10,7 @@ A dedicated, single-user dashboard for continuously monitoring X (Twitter) accou
 
 - **Four pluggable data providers (adapters):**
   1. `twscrape` — local sidecar using a dedicated account (**free, default**)
-  2. `nitter-rss` — public Nitter RSS feeds with server rotation (**free, automatic fallback**)
+  2. `nitter-rss` — Nitter RSS feeds: public instances with rotation, or the bundled local Nitter container (**free, automatic fallback**)
   3. `x-official` — official X API v2 (pay-per-use)
   4. `twitterapi-io` — third-party twitterapi.io service (pay-per-item)
 - **Server-side AI engine (Gemini / OpenAI / OpenRouter):**
@@ -18,7 +18,9 @@ A dedicated, single-user dashboard for continuously monitoring X (Twitter) accou
   - Fluent Persian translation of non-Persian posts
   - Sentiment analysis (positive / negative / neutral) and topic-tag extraction
   - Clustering of posts from the last 24 hours into shared events
-  - Periodic and on-demand analytical digests
+  - Periodic and on-demand analytical digests as short bullet points, one blank line between bullets
+  - Digests skip posts and news already covered by earlier digests (toggle in Settings); posts that made it into a digest carry an "In digest" tag in the feed
+  - Configurable look-back window for digests and clustering (hours)
   - Prompt-injection defenses
   - The AI provider, model, and API keys can be changed from the Settings page; environment variables act as defaults
 - **Built-in scheduler:**
@@ -28,6 +30,10 @@ A dedicated, single-user dashboard for continuously monitoring X (Twitter) accou
   - Random jitter (±20%) to avoid synchronized polling
   - Active hours, days, and timezones
   - "Poll now" and "Dry Run" buttons with cost comparison
+- **Telegram notifications (configured entirely from the admin panel):**
+  - Alerts and digests go to one or many recipients: your own user ID, groups, or `@channels`
+  - Bot token, recipient list, on/off switches, and a "send test message" button live in Settings
+  - The bot answers `/id` with your numeric ID, so finding the right chat ID takes seconds
 - **Cost control:**
   - Separate monthly budget caps per provider and for the whole system
   - Kill-Switch that halts polling when a budget cap is reached
@@ -63,7 +69,9 @@ npm run hash-password your_secure_password
 docker compose up -d --build
 ```
 
-Once the containers are up, the dashboard is available at `http://localhost:3000`.
+Once the containers are up, the dashboard is available at `http://localhost:3000` (set `PORT=1009` in `.env` to use another host port).
+
+Four containers run: `app`, `scraper`, `nitter`, `nitter-redis` (see sections 3-4). The image installs dependencies with `npm install --legacy-peer-deps` (the repo has no lockfile).
 
 > **Server recommendation:** Run the app on a VPS outside Iran whose datacenter IP is not blocked by Cloudflare/X.
 
@@ -88,7 +96,20 @@ The default `twscrape` provider fetches tweets without an official API key, but 
 
 ## 4. Configuring the Nitter RSS Provider
 
-Public Nitter instances are completely free and require no account. You can edit the server list in **System Settings**:
+### Option A: bundled local Nitter (recommended)
+
+`docker-compose.yml` ships a self-hosted Nitter (plus Redis) that is reachable only from the app at `http://nitter:8080`. Since 2024 Nitter needs a real X account session:
+
+1. Open **Settings → Local Nitter (Docker)**.
+2. Enter the username, the `twid` cookie (e.g. `u%3D123456789`, or just the numeric user ID), `auth_token`, and `ct0` of a dedicated/burner account (cookies come from F12 → Application → Cookies → `x.com`, as in section 3). Passwords are never needed.
+3. Click **Add account**. The panel writes a sessions file to a shared volume and the Nitter container restarts itself within seconds.
+4. **Check Nitter status** verifies that it serves RSS.
+
+Once at least one session exists, the local instance is used automatically and first.
+
+### Option B: public instances
+
+Public Nitter instances are free and need no account, but most are unreliable. Edit the list in **System Settings**:
 
 ```text
 https://nitter.privacydev.net
@@ -96,15 +117,30 @@ https://nitter.poast.org
 https://nitter.projectsegfau.lt
 ```
 
-The system automatically health-checks the instances and removes a failing instance from rotation for up to 1 hour.
+The system health-checks the instances and removes a failing one from rotation for up to 1 hour. Plain `http://` URLs are accepted only for local/Docker-network hosts (for example `http://nitter:8080`).
 
 ---
 
-## 5. Environment Variables (`.env`)
+## 5. Setting Up Telegram
+
+Everything is configured in **Settings → Telegram Notifications**; no `.env` edit is needed.
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and copy the token into the panel.
+2. Send `/id` to your bot in Telegram. It replies with your numeric user ID. For a group, add the bot to the group and send `/id` there to get the group ID (a negative number).
+3. Enter the IDs in **Recipient chat IDs**, one per line or comma-separated. Use numeric IDs (usernames of people do not work; `@channel` works if the bot is an admin there).
+4. Press **Send test message**, then **Save**.
+
+Alerts (rules with the Telegram channel enabled) and every generated digest are sent to all recipients. A failure for one recipient does not block the others. Each person must have started the bot (`/start` or `/id`) before it can message them.
+
+The bot listens with long polling, so no public URL is required. A token can only be polled by one program; if the same bot has a webhook elsewhere, polling fails with a 409 error (visible in the server log).
+
+---
+
+## 6. Environment Variables (`.env`)
 
 | Variable | Required | Description |
 | :--- | :---: | :--- |
-| `PORT` | No | Server port (default: 3000) |
+| `PORT` | No | Server port (default: 3000); with Docker Compose it is the host port |
 | `DATABASE_PATH` | No | Path to the SQLite database file |
 | `ADMIN_USERNAME` | Yes | Admin username (default: `admin`) |
 | `ADMIN_PASSWORD_HASH` | Yes | scrypt hash of the admin password, generated with `npm run hash-password` |
@@ -119,8 +155,9 @@ The system automatically health-checks the instances and removes a failing insta
 | `SIDECAR_SHARED_SECRET` | Yes | Shared authentication secret between Node and the Python sidecar |
 | `X_BEARER_TOKEN` | No | Official X API v2 bearer token |
 | `TWITTERAPI_IO_KEY` | No | twitterapi.io API key |
-| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token for sending alerts |
-| `TELEGRAM_CHAT_ID` | No | Telegram chat or channel ID for notifications |
+| `TELEGRAM_BOT_TOKEN` | No | Fallback only: the token is normally set in Settings, which takes priority |
+| `TELEGRAM_CHAT_ID` | No | Fallback only: recipients are normally set in Settings (comma-separated list supported) |
+| `NITTER_HMAC_KEY` | No | Signing key for the bundled Nitter's media URLs (change the default) |
 | `TZ` | No | Default timezone (default: `Asia/Tehran`) |
 
 \* Required only when Gemini is the selected AI provider. If you use OpenAI or OpenRouter, set the matching key instead (or enter it in Settings).
@@ -129,11 +166,11 @@ The system automatically health-checks the instances and removes a failing insta
 
 ---
 
-## 6. Local Development
+## 7. Local Development
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies (the repo has no lockfile and has peer-dependency conflicts)
+npm install --legacy-peer-deps
 
 # Run the logic tests
 npm test
@@ -149,7 +186,7 @@ To build the frontend for production: `npm run build`, then `npm start`.
 
 ---
 
-## 7. Adding a New Data Provider (Custom Provider)
+## 8. Adding a New Data Provider (Custom Provider)
 
 To add a new provider to the system:
 1. Create a new file in `server/providers/` (for example `my-provider.ts`).
