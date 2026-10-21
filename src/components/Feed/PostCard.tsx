@@ -164,6 +164,14 @@ export const PostCard: React.FC<PostCardProps> = ({
       <div className="flex items-center gap-2 flex-wrap mb-3">
         {getImportanceBadge(post.importance)}
         {getSentimentBadge(post.sentiment)}
+        {post.digestedAt && (
+          <span
+            title={toJalaliDate(post.digestedAt)}
+            className="px-2 py-0.5 rounded text-[11px] bg-violet-500/10 text-violet-300 border border-violet-500/20"
+          >
+            {t('In digest', 'در خلاصه آمده')}
+          </span>
+        )}
         {post.topics?.map((topic, i) => (
           <span key={i} className="px-2 py-0.5 rounded text-[11px] bg-slate-950 text-slate-400 border border-slate-800">
             #{topic}

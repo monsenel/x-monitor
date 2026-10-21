@@ -272,6 +272,12 @@ export function initDatabase() {
     );
   `);
 
+  // Marks posts already included in a digest so later digests skip them
+  const postCols = db.prepare('PRAGMA table_info(posts)').all() as { name: string }[];
+  if (!postCols.some((c) => c.name === 'digested_at')) {
+    db.exec('ALTER TABLE posts ADD COLUMN digested_at TEXT');
+  }
+
   // One-time cleanup: older Nitter posts were stored with a leading "@" in the username
   db.exec(`
     UPDATE posts SET
@@ -352,6 +358,7 @@ function initDefaultSettings() {
     // Digest Schedule
     digest_schedule_type: 'daily', // 'off' | 'hourly' | 'daily'
     digest_daily_time: '20:00',
+    digest_skip_repeated: '1', // exclude posts/news already covered by earlier digests
     digest_window_hours: '24', // how far back digests / clustering look (by post time)
     last_digest_run: ''
   };

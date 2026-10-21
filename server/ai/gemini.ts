@@ -464,16 +464,23 @@ function fallbackBullets(top: DigestPost[], total: number): string {
   return [`• تعداد ${total} پست در این بازه دریافت شد.`, ...items].join('\n\n');
 }
 
-export async function generateDigest(periodStart: string, periodEnd: string, posts: DigestPost[]): Promise<DigestResult> {
-  const d = await generateDigestRaw(periodStart, periodEnd, posts);
+export const DIGEST_MAX_POSTS = 25;
+
+// Posts that actually reach the model; callers mark exactly these as "digested".
+export function selectDigestPosts(posts: DigestPost[]): DigestPost[] {
+  return [...posts].sort((a, b) => (b.importance || 0) - (a.importance || 0)).slice(0, DIGEST_MAX_POSTS);
+}
+
+export async function generateDigest(periodStart: string, periodEnd: string, posts: DigestPost[], previousContent = ''): Promise<DigestResult> {
+  const d = await generateDigestRaw(periodStart, periodEnd, posts, previousContent);
   const groupSummaries: Record<string, string> = {};
   for (const [k, v] of Object.entries(d.groupSummaries || {})) groupSummaries[k] = toBullets(String(v));
   return { ...d, content: toBullets(d.content), groupSummaries };
 }
 
-async function generateDigestRaw(periodStart: string, periodEnd: string, posts: DigestPost[]): Promise<DigestResult> {
+async function generateDigestRaw(periodStart: string, periodEnd: string, posts: DigestPost[], previousContent: string): Promise<DigestResult> {
   const config = getAiConfig();
-  const topImportant = posts.sort((a, b) => (b.importance || 0) - (a.importance || 0)).slice(0, 25);
+  const topImportant = selectDigestPosts(posts);
 
   if (topImportant.length === 0) {
     return {
@@ -485,6 +492,9 @@ async function generateDigestRaw(periodStart: string, periodEnd: string, posts: 
   }
 
   const postsText = topImportant.map((p) => `[@${p.author}] (${p.groupName || 'عمومی'}, اهمیت: ${p.importance || '-'}): ${p.text}`).join('\n\n');
+  const dedupeNote = previousContent.trim()
+    ? `\n\nاخبار زیر قبلاً در خلاصه‌های پیشین منتشر شده‌اند. هیچ‌کدام را تکرار نکن، حتی اگر با کلمات دیگر یا از منبع دیگری آمده باشند؛ فقط اگر پیشرفت یا اطلاعات کاملاً تازه‌ای دارد، همان بخش تازه را بیاور:\n${previousContent.slice(0, 6000)}`
+    : '';
 
   const systemPrompt = `شما یک روزنامه‌نگار تحلیلی ارشد هستید. برای پست‌های برگزیده زیر یک دایجست خبری و اجرایی رسمی به زبان فارسی تولید کنید.
 خروجی باید یک شیء JSON با ساختار زیر باشد:
@@ -518,7 +528,7 @@ async function generateDigestRaw(periodStart: string, periodEnd: string, posts: 
           model: modelName,
           contents: [{ role: 'user', parts: [{ text: postsText }] }],
           config: {
-            systemInstruction: systemPrompt,
+            systemInstruction: systemPrompt + dedupeNote,
             temperature: 0.3,
             ...getThinkingConfig(modelName),
             responseMimeType: 'application/json',
@@ -563,7 +573,7 @@ async function generateDigestRaw(periodStart: string, periodEnd: string, posts: 
       baseUrl,
       apiKey: config.apiKey,
       model: config.model,
-      systemPrompt,
+      systemPrompt: systemPrompt + dedupeNote,
       userPrompt: postsText,
       extraHeaders,
       operation: 'digest',

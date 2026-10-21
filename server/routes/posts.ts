@@ -127,6 +127,7 @@ postsRouter.get('/', (req, res) => {
       url: r.url,
       isRead: !!r.is_read,
       isBookmarked: !!r.is_bookmarked,
+      digestedAt: r.digested_at || undefined,
       importance: r.importance,
       importanceReason: r.importance_reason,
       sentiment: r.sentiment,

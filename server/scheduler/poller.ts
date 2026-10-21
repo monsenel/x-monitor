@@ -4,7 +4,7 @@ import type { NormalizedPost, SourceEntity } from '../providers/types.ts';
 import { sseManager } from './sse.ts';
 import { alertEngine } from '../alerts/engine.ts';
 import { sendDigestToTelegram } from '../notify/telegram.ts';
-import { enrichPostsBatch, clusterRecentPosts, generateDigest } from '../ai/gemini.ts';
+import { enrichPostsBatch, clusterRecentPosts, generateDigest, selectDigestPosts } from '../ai/gemini.ts';
 
 export class SchedulerPoller {
   private timer: NodeJS.Timeout | null = null;
@@ -480,18 +480,32 @@ export class SchedulerPoller {
     const windowHours = Math.max(1, parseInt((db.prepare("SELECT value FROM settings WHERE key = 'digest_window_hours'").get() as any)?.value || '24', 10) || 24);
     const periodStart = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
 
+    const getSetting = (k: string) => (db.prepare('SELECT value FROM settings WHERE key = ?').get(k) as any)?.value as string | undefined;
+    const skipRepeated = getSetting('digest_skip_repeated') !== '0';
+
+    // GROUP BY: a post matched by several sources must appear once
     const posts = db.prepare(`
-      SELECT p.x_post_id as id, p.author_username as author, p.text, p.importance, p.url, g.name as groupName
+      SELECT p.x_post_id as id, p.author_username as author, p.text, p.importance, p.url, MIN(g.name) as groupName
       FROM posts p
       LEFT JOIN post_sources ps ON p.x_post_id = ps.post_id
       LEFT JOIN sources s ON ps.source_id = s.id
       LEFT JOIN groups g ON s.group_id = g.id
-      WHERE p.created_at >= ?
+      WHERE p.created_at >= ? ${skipRepeated ? 'AND p.digested_at IS NULL' : ''}
+      GROUP BY p.x_post_id
       ORDER BY p.importance DESC
       LIMIT 40
     `).all(periodStart) as unknown as any[];
 
-    const digest = await generateDigest(periodStart, periodEnd, posts);
+    // Earlier digests (within 2 days) so the model can avoid repeating the same news
+    const previousContent = skipRepeated
+      ? (db.prepare("SELECT content FROM digests WHERE created_at >= ? ORDER BY created_at DESC LIMIT 3")
+          .all(new Date(Date.now() - 48 * 3600 * 1000).toISOString()) as { content: string }[])
+          .map((r) => r.content)
+          .join('\n')
+      : '';
+
+    const usedIds = selectDigestPosts(posts).map((p) => p.id);
+    const digest = await generateDigest(periodStart, periodEnd, posts, previousContent);
     const id = `digest-${Date.now()}`;
 
     db.prepare(`
@@ -508,6 +522,11 @@ export class SchedulerPoller {
       new Date().toISOString()
     );
 
+    if (usedIds.length > 0) {
+      db.prepare(`UPDATE posts SET digested_at = ? WHERE x_post_id IN (${usedIds.map(() => '?').join(',')})`)
+        .run(periodEnd, ...usedIds);
+    }
+
     db.prepare("UPDATE settings SET value = ?, updated_at = ? WHERE key = 'last_digest_run'").run(
       periodEnd,
       new Date().toISOString()
@@ -518,7 +537,8 @@ export class SchedulerPoller {
     // Telegram delivery must never fail the digest itself
     let telegram: { sent: number; failed: { chatId: string; error: string }[] } | null = null;
     try {
-      telegram = await sendDigestToTelegram(digest);
+      // Nothing new to report: don't ping Telegram with an empty digest
+      telegram = usedIds.length > 0 ? await sendDigestToTelegram(digest) : null;
       if (telegram?.failed.length) console.error('Telegram digest delivery failed:', telegram.failed);
     } catch (err) {
       console.error('Telegram digest delivery error:', err);

@@ -33,6 +33,7 @@ export interface Post {
   url: string;
   isRead: boolean;
   isBookmarked: boolean;
+  digestedAt?: string; // set once the post was included in a digest
   importance?: number;
   importanceReason?: string;
   sentiment?: 'positive' | 'neutral' | 'negative';

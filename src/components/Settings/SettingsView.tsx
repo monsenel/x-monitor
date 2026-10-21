@@ -955,6 +955,15 @@ export const SettingsView: React.FC = () => {
             />
           </div>
 
+          <label className="flex items-center gap-2 text-slate-300 cursor-pointer md:col-span-2">
+            <input
+              type="checkbox"
+              checked={settings['digest_skip_repeated'] !== '0'}
+              onChange={(e) => handleChange('digest_skip_repeated', e.target.checked ? '1' : '0')}
+            />
+            <span>{t('Skip news already covered in earlier digests', 'عدم تکرار خبرهایی که قبلاً در خلاصه‌های پیشین آمده')}</span>
+          </label>
+
           <div>
             <label className="block text-slate-300 font-medium mb-1">
               {t('Digest / clustering look-back (hours):', 'بازه بررسی دایجست و خوشه‌بندی (ساعت):')}
