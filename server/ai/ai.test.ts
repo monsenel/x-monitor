@@ -26,7 +26,7 @@ test('extractJson extracts JSON object embedded in text', () => {
 
 import { toBullets } from './gemini.ts';
 
-test('toBullets normalises any list style to one bullet per line', () => {
+test('toBullets normalises any list style to one bullet per paragraph', () => {
   const out = toBullets('الف\n\n- ب\n۱. ج\n**د**\nبخش:\n* ه');
-  assert.equal(out, '• الف\n• ب\n• ج\n• د\nبخش:\n• ه');
+  assert.equal(out, '• الف\n\n• ب\n\n• ج\n\n• د\n\nبخش:\n\n• ه');
 });

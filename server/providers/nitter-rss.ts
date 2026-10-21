@@ -366,7 +366,8 @@ export class NitterRssProvider implements DataProvider {
 
       // Extract author from title or dc:creator or link
       const authorMatch = link.match(/https?:\/\/[^\/]+\/([^\/]+)\/status/);
-      const authorUsername = item['dc:creator'] || authorMatch?.[1] || source.value.replace(/^@/, '');
+      // Nitter's dc:creator is "@name"; keep usernames bare so "@" prefixes and URLs aren't doubled
+      const authorUsername = String(item['dc:creator'] || authorMatch?.[1] || source.value).replace(/^@/, '');
       const rawDesc = String(item.description || '');
       const plainText = this.stripHtml(rawDesc);
       const media = this.extractMedia(rawDesc);

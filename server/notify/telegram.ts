@@ -123,8 +123,9 @@ export function formatDigestForTelegram(
   if (topPosts.length > 0) {
     lines.push('', '⭐ <b>پست‌های برگزیده</b>');
     for (const p of topPosts) {
-      const snippet = p.text.length > 140 ? p.text.slice(0, 140) + '…' : p.text;
-      lines.push(`• @${escapeHtml(p.author)}: ${escapeHtml(snippet)} <a href="${escapeHtml(p.url)}">🔗</a>`);
+      const text = p.text.replace(/\s+/g, ' ').trim();
+      const snippet = text.length > 500 ? text.slice(0, 500) + '…' : text;
+      lines.push(`• @${escapeHtml(p.author.replace(/^@/, ''))}: ${escapeHtml(snippet)} <a href="${escapeHtml(p.url)}">🔗</a>`);
     }
   }
   return lines.join('\n').trim();

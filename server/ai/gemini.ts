@@ -442,23 +442,23 @@ ${inputList}
 type DigestPost = { id: string; author: string; text: string; groupName?: string; importance?: number; url: string };
 type DigestResult = { title: string; content: string; topPosts: string[]; groupSummaries: Record<string, string> };
 
-// Force a bullet list: one "• " item per line, existing markers/numbering stripped,
-// blank lines dropped. Lines ending with ":" are kept as plain section headings.
+// Force a bullet list: one "• " item per paragraph (blank line between items), existing
+// markers/numbering stripped. Lines ending with ":" are kept as plain section headings.
 export function toBullets(text: string): string {
   return String(text || '')
     .split('\n')
     .map((l) => l.replace(/^\s*(?:[-*•–—▪●]+|\d+[.)]|[۰-۹]+[.)])\s*/, '').replace(/\*\*/g, '').trim())
     .filter(Boolean)
     .map((l) => (/[:：]$/.test(l) ? l : `• ${l}`))
-    .join('\n');
+    .join('\n\n'); // blank line between bullets
 }
 
 function fallbackBullets(top: DigestPost[], total: number): string {
   const items = top.slice(0, 10).map((p) => {
     const t = p.text.replace(/\s+/g, ' ').trim();
-    return `• @${p.author}: ${t.length > 140 ? t.slice(0, 140) + '…' : t}`;
+    return `• @${p.author.replace(/^@/, '')}: ${t.length > 500 ? t.slice(0, 500) + '…' : t}`;
   });
-  return [`• تعداد ${total} پست در این بازه دریافت شد.`, ...items].join('\n');
+  return [`• تعداد ${total} پست در این بازه دریافت شد.`, ...items].join('\n\n');
 }
 
 export async function generateDigest(periodStart: string, periodEnd: string, posts: DigestPost[]): Promise<DigestResult> {

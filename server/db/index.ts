@@ -272,6 +272,14 @@ export function initDatabase() {
     );
   `);
 
+  // One-time cleanup: older Nitter posts were stored with a leading "@" in the username
+  db.exec(`
+    UPDATE posts SET
+      author_username = ltrim(author_username, '@'),
+      url = replace(url, '/@', '/')
+    WHERE author_username LIKE '@%'
+  `);
+
   initDefaultSettings();
 }
 
