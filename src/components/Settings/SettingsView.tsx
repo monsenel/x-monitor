@@ -954,6 +954,22 @@ export const SettingsView: React.FC = () => {
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
             />
           </div>
+
+          <div>
+            <label className="block text-slate-300 font-medium mb-1">
+              {t('Digest / clustering look-back (hours):', 'بازه بررسی دایجست و خوشه‌بندی (ساعت):')}
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={settings['digest_window_hours'] || '24'}
+              onChange={(e) => handleChange('digest_window_hours', e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
+            />
+            <p className="text-slate-500 mt-1">
+              {t('Posts older than this (by post time) are ignored. Use 72 or 168 for accounts that post rarely.', 'پست‌های قدیمی‌تر از این (بر اساس زمان پست) نادیده گرفته می‌شوند. برای حساب‌هایی که کم پست می‌گذارند ۷۲ یا ۱۶۸ بگذارید.')}
+            </p>
+          </div>
         </div>
       </div>
 

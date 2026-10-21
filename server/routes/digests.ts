@@ -28,7 +28,8 @@ digestsRouter.post('/generate', async (_req, res) => {
 
 // Trigger clustering
 digestsRouter.post('/cluster-now', async (_req, res) => {
-  const oneDayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const windowHours = Math.max(1, parseInt((db.prepare("SELECT value FROM settings WHERE key = 'digest_window_hours'").get() as any)?.value || '24', 10) || 24);
+  const oneDayAgo = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
   const recentPosts = db.prepare(`
     SELECT x_post_id as id, text, author_username as author
     FROM posts

@@ -109,6 +109,9 @@ export class NitterRssProvider implements DataProvider {
   private stripHtml(html: string): string {
     if (!html) return '';
     return html
+      // Links point at the Nitter instance that served the RSS (e.g. http://nitter/user/status/1#m); send them to x.com
+      .replace(/https?:\/\/(?:nitter|localhost)(?::\d+)?\//gi, 'https://x.com/')
+      .replace(/(\/status\/\d+)#m/g, '$1')
       .replace(/<br\s*[\/]?>/gi, '\n')
       .replace(/<\/p>/gi, '\n\n')
       .replace(/<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)')

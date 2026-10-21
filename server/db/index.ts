@@ -344,6 +344,7 @@ function initDefaultSettings() {
     // Digest Schedule
     digest_schedule_type: 'daily', // 'off' | 'hourly' | 'daily'
     digest_daily_time: '20:00',
+    digest_window_hours: '24', // how far back digests / clustering look (by post time)
     last_digest_run: ''
   };
 

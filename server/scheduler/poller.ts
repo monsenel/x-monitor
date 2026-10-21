@@ -477,7 +477,8 @@ export class SchedulerPoller {
 
   async runDigest(): Promise<any> {
     const periodEnd = new Date().toISOString();
-    const periodStart = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const windowHours = Math.max(1, parseInt((db.prepare("SELECT value FROM settings WHERE key = 'digest_window_hours'").get() as any)?.value || '24', 10) || 24);
+    const periodStart = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
 
     const posts = db.prepare(`
       SELECT p.x_post_id as id, p.author_username as author, p.text, p.importance, p.url, g.name as groupName
