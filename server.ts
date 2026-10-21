@@ -21,6 +21,7 @@ import { postsRouter } from './server/routes/posts.ts';
 import { providersRouter } from './server/routes/providers.ts';
 import { scraperRouter } from './server/routes/scraper.ts';
 import { syncNitterSessionsFile } from './server/nitter/sessions.ts';
+import { startTelegramBot } from './server/notify/telegram-bot.ts';
 import { nitterRouter } from './server/routes/nitter.ts';
 import { digestsRouter } from './server/routes/digests.ts';
 import { alertsRouter } from './server/routes/alerts.ts';
@@ -90,6 +91,9 @@ app.use('/api/scheduler', requireAuth, requireCsrfHeader, schedulerRouter);
 
 // Keep the local Nitter sessions file in sync with the DB on boot
 syncNitterSessionsFile();
+
+// Telegram bot: answers /id with the sender's chat ID
+startTelegramBot();
 
 // Start scheduler
 scheduler.start();

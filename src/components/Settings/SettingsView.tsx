@@ -1023,8 +1023,8 @@ export const SettingsView: React.FC = () => {
             />
             <p className="text-slate-500 mt-1 leading-relaxed">
               {t(
-                'Personal user ID, group ID (negative number, bot must be a member) or @channel (bot must be admin). Each person must press /start on the bot first.',
-                'شناسه عددی شخص، شناسه گروه (عدد منفی؛ ربات باید عضو گروه باشد) یا @کانال (ربات باید ادمین باشد). هر شخص باید قبلاً در ربات /start را بزند.'
+                'Send /id to your bot in Telegram and it replies with your numeric ID (add the bot to a group and send /id there for the group ID). Usernames of people do not work, only numeric IDs, or @channel (bot must be admin).',
+                'در تلگرام به ربات خود /id بفرستید تا شناسه عددی شما را بگوید (برای گروه، ربات را عضو کنید و همان‌جا /id بفرستید). نام کاربری افراد کار نمی‌کند؛ فقط شناسه عددی یا @کانال (ربات باید ادمین باشد).'
               )}
             </p>
           </div>

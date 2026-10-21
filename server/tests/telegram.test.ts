@@ -23,3 +23,20 @@ test('digest formatting escapes HTML from post/AI text', () => {
   assert.ok(!html.includes('<script>'));
   assert.ok(html.includes(escapeHtml('<script>')));
 });
+
+import { parseCommand, buildIdReply } from '../notify/telegram-bot.ts';
+
+test('parseCommand handles bot suffix and ignores plain text', () => {
+  assert.equal(parseCommand('/id'), 'id');
+  assert.equal(parseCommand('/ID@MyBot'), 'id');
+  assert.equal(parseCommand('/start hello'), 'start');
+  assert.equal(parseCommand('hello /id'), null);
+});
+
+test('buildIdReply shows user id, and chat id only for groups', () => {
+  const priv = buildIdReply({ text: '/id', chat: { id: 5, type: 'private' }, from: { id: 5, username: 'u<' } });
+  assert.ok(priv.includes('<code>5</code>') && !priv.includes('شناسه چت'));
+  assert.ok(priv.includes('u&lt;'));
+  const grp = buildIdReply({ text: '/id', chat: { id: -100123, type: 'supergroup', title: 'G' }, from: { id: 5 } });
+  assert.ok(grp.includes('<code>-100123</code>'));
+});
