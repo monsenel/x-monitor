@@ -262,6 +262,14 @@ export function initDatabase() {
       locks_json TEXT DEFAULT '[]',
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS nitter_sessions (
+      username TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      auth_token TEXT NOT NULL,
+      ct0 TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
 
   initDefaultSettings();

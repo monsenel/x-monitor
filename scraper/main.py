@@ -11,7 +11,7 @@ SHARED_SECRET = os.getenv("SIDECAR_SHARED_SECRET", "xmonitor-internal-secret-cha
 DB_PATH = os.getenv("TWSCRAPE_DB_PATH", "/data/twscrape_accounts.db")
 
 # Initialize twscrape API
-api = API(pool_url=f"sqlite+aiosqlite:///{DB_PATH}")
+api = API(DB_PATH)
 
 
 def verify_secret(x_sidecar_secret: Optional[str] = Header(None)):

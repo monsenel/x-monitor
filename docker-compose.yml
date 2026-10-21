@@ -24,8 +24,10 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - TZ=${TZ:-Asia/Tehran}
+      - NITTER_LOCAL_URL=http://nitter:8080
     volumes:
       - xmonitor-data:/data
+      - nitter-sessions:/nitter-sessions
     networks:
       - xmonitor-net
     depends_on:
@@ -48,8 +50,42 @@ services:
     networks:
       - xmonitor-net
 
+  # Self-hosted Nitter. X accounts are added from the admin panel (Settings);
+  # the panel writes the sessions file and this wrapper restarts Nitter on change.
+  nitter:
+    image: zedeus/nitter:latest
+    container_name: xmonitor-nitter
+    restart: unless-stopped
+    # Not exposed to the host: reachable only from the app at http://nitter:8080
+    expose:
+      - "8080"
+    environment:
+      - NITTER_HMAC_KEY=${NITTER_HMAC_KEY:-xmonitor-nitter-hmac-change-me}
+    entrypoint: ["/bin/sh", "/config/entrypoint.sh"]
+    volumes:
+      - ./nitter:/config:ro
+      - nitter-sessions:/sessions:ro
+    networks:
+      - xmonitor-net
+    depends_on:
+      - nitter-redis
+      # app first, so the shared sessions volume is created with the app's ownership
+      - app
+
+  nitter-redis:
+    image: redis:7-alpine
+    container_name: xmonitor-nitter-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - nitter-redis-data:/data
+    networks:
+      - xmonitor-net
+
 volumes:
   xmonitor-data:
+  nitter-sessions:
+  nitter-redis-data:
   twscrape-data:
 
 networks:

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../../utils/api.ts';
 import { ProviderInfo } from '../../types.ts';
 import { usePreferences } from '../../context/PreferencesContext.tsx';
+import { NitterLocalPanel } from './NitterLocalPanel.tsx';
 import {
   Settings,
   DollarSign,
@@ -514,6 +515,11 @@ export const SettingsView: React.FC = () => {
           placeholder="https://nitter.privacydev.net"
         />
       </div>
+
+      <NitterLocalPanel
+        instances={settings['nitter_instances'] || ''}
+        onInstancesChange={(v) => handleChange('nitter_instances', v)}
+      />
 
       {/* 4. AI & Digest Schedule */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-5">

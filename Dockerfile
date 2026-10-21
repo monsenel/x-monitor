@@ -14,7 +14,8 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=3000
+    PORT=3000 \
+    NITTER_SESSIONS_PATH=/nitter-sessions/sessions.jsonl
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
@@ -30,7 +31,7 @@ COPY --from=builder /app/server ./server
 COPY --from=builder /app/server.ts ./server.ts
 
 # Ensure data directory exists and is owned by appuser
-RUN mkdir -p /data && chown -R appuser:appgroup /data /app
+RUN mkdir -p /data /nitter-sessions && chown -R appuser:appgroup /data /nitter-sessions /app
 
 USER appuser
 

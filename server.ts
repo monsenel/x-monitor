@@ -20,6 +20,8 @@ import { sourcesRouter } from './server/routes/sources.ts';
 import { postsRouter } from './server/routes/posts.ts';
 import { providersRouter } from './server/routes/providers.ts';
 import { scraperRouter } from './server/routes/scraper.ts';
+import { syncNitterSessionsFile } from './server/nitter/sessions.ts';
+import { nitterRouter } from './server/routes/nitter.ts';
 import { digestsRouter } from './server/routes/digests.ts';
 import { alertsRouter } from './server/routes/alerts.ts';
 import { usageRouter } from './server/routes/usage.ts';
@@ -79,11 +81,15 @@ app.use('/api/sources', requireAuth, requireCsrfHeader, sourcesRouter);
 app.use('/api/posts', requireAuth, requireCsrfHeader, postsRouter);
 app.use('/api/providers', requireAuth, requireCsrfHeader, providersRouter);
 app.use('/api/scraper', requireAuth, requireCsrfHeader, scraperRouter);
+app.use('/api/nitter', requireAuth, requireCsrfHeader, nitterRouter);
 app.use('/api/digests', requireAuth, requireCsrfHeader, digestsRouter);
 app.use('/api/alerts', requireAuth, requireCsrfHeader, alertsRouter);
 app.use('/api/usage', requireAuth, requireCsrfHeader, usageRouter);
 app.use('/api/settings', requireAuth, requireCsrfHeader, settingsRouter);
 app.use('/api/scheduler', requireAuth, requireCsrfHeader, schedulerRouter);
+
+// Keep the local Nitter sessions file in sync with the DB on boot
+syncNitterSessionsFile();
 
 // Start scheduler
 scheduler.start();

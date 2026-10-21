@@ -1,3 +1,4 @@
+import { collapseNewlines } from '../../utils/text.ts';
 import React, { useState } from 'react';
 import { Post } from '../../types.ts';
 import { toRelativeTimeFa, toJalaliDate, toGregorianDate, formatNumberFa, toPersianDigits } from '../../utils/date.ts';
@@ -180,7 +181,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
       {/* Text Content */}
       <div className="mb-3 text-slate-200 text-sm leading-relaxed whitespace-pre-line select-text" dir="auto">
-        {displayPrimaryText}
+        {displayPrimaryText ? collapseNewlines(displayPrimaryText) : displayPrimaryText}
       </div>
 
       {/* Translation toggle button if post has translation */}

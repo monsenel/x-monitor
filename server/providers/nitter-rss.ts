@@ -30,11 +30,28 @@ export class NitterRssProvider implements DataProvider {
 
   getInstances(): string[] {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'nitter_instances'").get() as { value: string } | undefined;
-    if (!row || !row.value) return [];
-    return row.value
+    const list = (row?.value || '')
       .split('\n')
       .map((s) => s.trim().replace(/\/$/, ''))
-      .filter((s) => s.startsWith('https://'));
+      .filter((s) => {
+        if (s.startsWith('https://')) return true;
+        // Plain http is only allowed for local / docker-network hosts (e.g. http://nitter:8080)
+        if (!s.startsWith('http://')) return false;
+        try {
+          const host = new URL(s).hostname;
+          return host === 'localhost' || !host.includes('.');
+        } catch {
+          return false;
+        }
+      });
+
+    // The bundled Nitter is used automatically (and first) once an X account session exists
+    const local = (process.env.NITTER_LOCAL_URL || '').replace(/\/$/, '');
+    if (local && !list.includes(local)) {
+      const hasSession = db.prepare('SELECT 1 FROM nitter_sessions LIMIT 1').get();
+      if (hasSession) list.unshift(local);
+    }
+    return list;
   }
 
   private pickHealthyInstance(): string | null {
@@ -101,6 +118,8 @@ export class NitterRssProvider implements DataProvider {
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
+      // Collapse runs of blank lines into a single newline
+      .replace(/[ \t]*\n(?:[ \t]*\n)+/g, '\n')
       .trim();
   }
 
