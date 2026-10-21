@@ -9,14 +9,7 @@ interface Session {
   created_at: string;
 }
 
-interface Props {
-  instances: string;
-  onInstancesChange: (value: string) => void;
-}
-
-const LOCAL_URL = 'http://nitter:8080';
-
-export const NitterLocalPanel: React.FC<Props> = ({ instances, onInstancesChange }) => {
+export const NitterLocalPanel: React.FC = () => {
   const { t } = usePreferences();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [form, setForm] = useState({ username: '', twid: '', auth_token: '', ct0: '' });
@@ -78,11 +71,6 @@ export const NitterLocalPanel: React.FC<Props> = ({ instances, onInstancesChange
     }
   };
 
-  const inList = instances.split('\n').some((l) => l.trim().replace(/\/$/, '') === LOCAL_URL);
-  const addToList = () => {
-    onInstancesChange(inList ? instances : `${LOCAL_URL}\n${instances}`.trim());
-  };
-
   const input = 'w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono text-[11px]';
 
   return (
@@ -122,15 +110,6 @@ export const NitterLocalPanel: React.FC<Props> = ({ instances, onInstancesChange
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>{t('Check Nitter status', 'بررسی وضعیت Nitter')}</span>
-        </button>
-        <button
-          onClick={addToList}
-          disabled={inList}
-          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 cursor-pointer disabled:opacity-40"
-        >
-          {inList
-            ? t('Already in instances list', 'در لیست سرورها هست')
-            : t(`Add ${LOCAL_URL} to instances (then Save)`, `افزودن ${LOCAL_URL} به لیست سرورها (سپس ذخیره)`)}
         </button>
       </div>
 

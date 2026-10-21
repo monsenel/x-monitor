@@ -28,30 +28,9 @@ export class NitterRssProvider implements DataProvider {
     });
   }
 
+  // Only the bundled local Nitter is used (X account sessions are managed in Settings)
   getInstances(): string[] {
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'nitter_instances'").get() as { value: string } | undefined;
-    const list = (row?.value || '')
-      .split('\n')
-      .map((s) => s.trim().replace(/\/$/, ''))
-      .filter((s) => {
-        if (s.startsWith('https://')) return true;
-        // Plain http is only allowed for local / docker-network hosts (e.g. http://nitter:8080)
-        if (!s.startsWith('http://')) return false;
-        try {
-          const host = new URL(s).hostname;
-          return host === 'localhost' || !host.includes('.');
-        } catch {
-          return false;
-        }
-      });
-
-    // The bundled Nitter is used automatically (and first) once an X account session exists
-    const local = (process.env.NITTER_LOCAL_URL || '').replace(/\/$/, '');
-    if (local && !list.includes(local)) {
-      const hasSession = db.prepare('SELECT 1 FROM nitter_sessions LIMIT 1').get();
-      if (hasSession) list.unshift(local);
-    }
-    return list;
+    return [(process.env.NITTER_LOCAL_URL || 'http://nitter:8080').replace(/\/$/, '')];
   }
 
   private pickHealthyInstance(): string | null {
@@ -421,7 +400,7 @@ export class NitterRssProvider implements DataProvider {
     if (instances.length === 0) {
       return {
         ok: false,
-        message: 'هیچ آدرس Nitter در تنظیمات وارد نشده است. لطفاً حداقل یک سرور معتبر اضافه کنید.',
+        message: 'آدرس Nitter محلی تنظیم نشده است.',
       };
     }
 

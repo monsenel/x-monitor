@@ -341,14 +341,6 @@ function initDefaultSettings() {
     ai_openrouter_api_key: '',
     ai_openrouter_model: 'openai/gpt-4o-mini',
 
-    // Nitter instances (one URL per line)
-    nitter_instances: [
-      'https://nitter.poast.org',
-      'https://nitter.privacydev.net',
-      'https://xcancel.com',
-      'https://nitter.space'
-    ].join('\n'),
-
     // Telegram
     telegram_enabled: '1',
     telegram_bot_token: '',

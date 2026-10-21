@@ -10,7 +10,7 @@ A dedicated, single-user dashboard for continuously monitoring X (Twitter) accou
 
 - **Four pluggable data providers (adapters):**
   1. `twscrape` — local sidecar using a dedicated account (**free, default**)
-  2. `nitter-rss` — Nitter RSS feeds: public instances with rotation, or the bundled local Nitter container (**free, automatic fallback**)
+  2. `nitter-rss` — the bundled local Nitter container, with X accounts managed from the admin panel (**free, automatic fallback**)
   3. `x-official` — official X API v2 (pay-per-use)
   4. `twitterapi-io` — third-party twitterapi.io service (pay-per-item)
 - **Server-side AI engine (Gemini / OpenAI / OpenRouter):**
@@ -96,28 +96,14 @@ The default `twscrape` provider fetches tweets without an official API key, but 
 
 ## 4. Configuring the Nitter RSS Provider
 
-### Option A: bundled local Nitter (recommended)
-
-`docker-compose.yml` ships a self-hosted Nitter (plus Redis) that is reachable only from the app at `http://nitter:8080`. Since 2024 Nitter needs a real X account session:
+`docker-compose.yml` ships a self-hosted Nitter (plus Redis) that is reachable only from the app at `http://nitter:8080`. It is the only Nitter instance the app uses (there is no public-instance list). Since 2024 Nitter needs a real X account session:
 
 1. Open **Settings → Local Nitter (Docker)**.
 2. Enter the username, the `twid` cookie (e.g. `u%3D123456789`, or just the numeric user ID), `auth_token`, and `ct0` of a dedicated/burner account (cookies come from F12 → Application → Cookies → `x.com`, as in section 3). Passwords are never needed.
 3. Click **Add account**. The panel writes a sessions file to a shared volume and the Nitter container restarts itself within seconds.
 4. **Check Nitter status** verifies that it serves RSS.
 
-Once at least one session exists, the local instance is used automatically and first.
-
-### Option B: public instances
-
-Public Nitter instances are free and need no account, but most are unreliable. Edit the list in **System Settings**:
-
-```text
-https://nitter.privacydev.net
-https://nitter.poast.org
-https://nitter.projectsegfau.lt
-```
-
-The system health-checks the instances and removes a failing one from rotation for up to 1 hour. Plain `http://` URLs are accepted only for local/Docker-network hosts (for example `http://nitter:8080`).
+Without a valid account session the `nitter-rss` provider cannot fetch anything. Running the app outside Docker (`npm run dev`) has no Nitter container; set `NITTER_LOCAL_URL` to a Nitter you run yourself.
 
 ---
 
@@ -157,6 +143,7 @@ The bot listens with long polling, so no public URL is required. A token can onl
 | `TWITTERAPI_IO_KEY` | No | twitterapi.io API key |
 | `TELEGRAM_BOT_TOKEN` | No | Fallback only: the token is normally set in Settings, which takes priority |
 | `TELEGRAM_CHAT_ID` | No | Fallback only: recipients are normally set in Settings (comma-separated list supported) |
+| `NITTER_LOCAL_URL` | No | Nitter base URL used by the app (default: `http://nitter:8080`) |
 | `NITTER_HMAC_KEY` | No | Signing key for the bundled Nitter's media URLs (change the default) |
 | `TZ` | No | Default timezone (default: `Asia/Tehran`) |
 

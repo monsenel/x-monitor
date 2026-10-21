@@ -496,30 +496,8 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Nitter Instances List */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-3">
-        <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
-          <span>{t('Public Nitter Instances (One URL per line)', 'لیست سرورهای عمومی Nitter (هر آدرس در یک خط)')}</span>
-        </h3>
-        <p className="text-xs text-slate-400">
-          {t(
-            'The system rotates across these instances and cools down failing instances for 1 hour.',
-            'سامانه بین این سرورها گردش کرده و سرورهای ناموفق را تا ۱ ساعت نادیده می‌گیرد.'
-          )}
-        </p>
-        <textarea
-          rows={4}
-          value={settings['nitter_instances'] || ''}
-          onChange={(e) => handleChange('nitter_instances', e.target.value)}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
-          placeholder="https://nitter.privacydev.net"
-        />
-      </div>
-
-      <NitterLocalPanel
-        instances={settings['nitter_instances'] || ''}
-        onInstancesChange={(v) => handleChange('nitter_instances', v)}
-      />
+      {/* 3. Local Nitter */}
+      <NitterLocalPanel />
 
       {/* 4. AI & Digest Schedule */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-5">
