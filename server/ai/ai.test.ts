@@ -30,3 +30,8 @@ test('toBullets normalises any list style to one bullet per paragraph', () => {
   const out = toBullets('الف\n\n- ب\n۱. ج\n**د**\nبخش:\n* ه');
   assert.equal(out, '• الف\n\n• ب\n\n• ج\n\n• د\n\nبخش:\n\n• ه');
 });
+
+test('toBullets splits bullets that arrive on a single line', () => {
+  assert.equal(toBullets('• الف (@a) • ب • ج'), '• الف (@a)\n\n• ب\n\n• ج');
+  assert.equal(toBullets('الف\\nب'), '• الف\n\n• ب');
+});

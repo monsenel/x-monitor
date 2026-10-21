@@ -446,6 +446,9 @@ type DigestResult = { title: string; content: string; topPosts: string[]; groupS
 // markers/numbering stripped. Lines ending with ":" are kept as plain section headings.
 export function toBullets(text: string): string {
   return String(text || '')
+    // models sometimes return everything on one line ("• a • b • c") or with a literal "\\n"
+    .replace(/\\n/g, '\n')
+    .replace(/\s*[•●▪]\s*/g, '\n')
     .split('\n')
     .map((l) => l.replace(/^\s*(?:[-*•–—▪●]+|\d+[.)]|[۰-۹]+[.)])\s*/, '').replace(/\*\*/g, '').trim())
     .filter(Boolean)
