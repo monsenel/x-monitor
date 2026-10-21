@@ -439,7 +439,36 @@ ${inputList}
   }
 }
 
-export async function generateDigest(periodStart: string, periodEnd: string, posts: { id: string; author: string; text: string; groupName?: string; importance?: number; url: string }[]): Promise<{ title: string; content: string; topPosts: string[]; groupSummaries: Record<string, string> }> {
+type DigestPost = { id: string; author: string; text: string; groupName?: string; importance?: number; url: string };
+type DigestResult = { title: string; content: string; topPosts: string[]; groupSummaries: Record<string, string> };
+
+// Force a bullet list: one "• " item per line, existing markers/numbering stripped,
+// blank lines dropped. Lines ending with ":" are kept as plain section headings.
+export function toBullets(text: string): string {
+  return String(text || '')
+    .split('\n')
+    .map((l) => l.replace(/^\s*(?:[-*•–—▪●]+|\d+[.)]|[۰-۹]+[.)])\s*/, '').replace(/\*\*/g, '').trim())
+    .filter(Boolean)
+    .map((l) => (/[:：]$/.test(l) ? l : `• ${l}`))
+    .join('\n');
+}
+
+function fallbackBullets(top: DigestPost[], total: number): string {
+  const items = top.slice(0, 10).map((p) => {
+    const t = p.text.replace(/\s+/g, ' ').trim();
+    return `• @${p.author}: ${t.length > 140 ? t.slice(0, 140) + '…' : t}`;
+  });
+  return [`• تعداد ${total} پست در این بازه دریافت شد.`, ...items].join('\n');
+}
+
+export async function generateDigest(periodStart: string, periodEnd: string, posts: DigestPost[]): Promise<DigestResult> {
+  const d = await generateDigestRaw(periodStart, periodEnd, posts);
+  const groupSummaries: Record<string, string> = {};
+  for (const [k, v] of Object.entries(d.groupSummaries || {})) groupSummaries[k] = toBullets(String(v));
+  return { ...d, content: toBullets(d.content), groupSummaries };
+}
+
+async function generateDigestRaw(periodStart: string, periodEnd: string, posts: DigestPost[]): Promise<DigestResult> {
   const config = getAiConfig();
   const topImportant = posts.sort((a, b) => (b.importance || 0) - (a.importance || 0)).slice(0, 25);
 
@@ -458,12 +487,13 @@ export async function generateDigest(periodStart: string, periodEnd: string, pos
 خروجی باید یک شیء JSON با ساختار زیر باشد:
 {
   "title": "تیتر رسمی و جامع خلاصه",
-  "content": "متن تفصیلی و بندبندی‌شده به زبان فارسی با ساختار تحلیلی بولت‌پوینت",
+  "content": "فهرست بولتی به فارسی: هر خط یک نکته کوتاه (یک جمله) که با «• » شروع شود، بدون پاراگراف و بدون خط خالی",
   "topPosts": ["شناسه پست‌های کلیدی"],
   "groupSummaries": {
-    "نام گروه موضوعی": "خلاصه گروه"
+    "نام گروه موضوعی": "خلاصه گروه به صورت چند بولت کوتاه، هر کدام در یک خط با «• »"
   }
 }
+قوانین: خروجی را فقط به صورت بولت‌پوینت‌های کوتاه بنویس؛ هر بولت یک خبر یا نکته مستقل با ذکر منبع (@نام‌کاربری)؛ از نوشتن مقدمه، نتیجه‌گیری یا پاراگراف طولانی خودداری کن.
 `;
 
   try {
@@ -472,7 +502,7 @@ export async function generateDigest(periodStart: string, periodEnd: string, pos
       if (!ai) {
         return {
           title: `خلاصه اخبار و پست‌های برگزیده`,
-          content: `تعداد ${posts.length} پست در این بازه دریافت شد. نویسندگان شاخص: ${Array.from(new Set(topImportant.map(p => '@' + p.author))).join('، ')}`,
+          content: fallbackBullets(topImportant, posts.length),
           topPosts: topImportant.map(p => p.id),
           groupSummaries: {},
         };
@@ -547,7 +577,7 @@ export async function generateDigest(periodStart: string, periodEnd: string, pos
   } catch (err: any) {
     return {
       title: `خلاصه اخبار و پست‌های برگزیده`,
-      content: `تعداد ${posts.length} پست در این بازه دریافت شد. نویسندگان شاخص: ${Array.from(new Set(topImportant.map(p => '@' + p.author))).join('، ')}`,
+      content: fallbackBullets(topImportant, posts.length),
       topPosts: topImportant.map(p => p.id),
       groupSummaries: {},
     };

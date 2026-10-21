@@ -23,3 +23,10 @@ test('extractJson extracts JSON object embedded in text', () => {
   assert.equal(res.title, 'Test Summary');
   assert.deepEqual(res.topPosts, ['p1']);
 });
+
+import { toBullets } from './gemini.ts';
+
+test('toBullets normalises any list style to one bullet per line', () => {
+  const out = toBullets('الف\n\n- ب\n۱. ج\n**د**\nبخش:\n* ه');
+  assert.equal(out, '• الف\n• ب\n• ج\n• د\nبخش:\n• ه');
+});
